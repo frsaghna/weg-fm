@@ -12,8 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import gi
 gi.require_version('Gtk', '4.0')
+gi.require_version('Gdk', '4.0')
 gi.require_version('Gio', '2.0')
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
 from src.window import WegWindow
 
@@ -57,6 +58,11 @@ class TestNnnNavigationAndCmdBar(unittest.TestCase):
     def test_jumps_and_navigation(self):
         win = WegWindow(Gtk.Application(application_id="fm.weg.TestNnn"), initial_dir=self.tmp_dir)
         
+        # Test tilde key navigation without AttributeError
+        handled = win._on_key_pressed(None, Gdk.KEY_asciitilde, 0, 0)
+        self.assertTrue(handled)
+        win.navigate_to(self.tmp_dir)
+
         # Jump to first
         win.file_list.jump_to_first()
         self.assertEqual(win.file_list.get_focused_item().name, "alpha_dir")

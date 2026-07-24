@@ -354,7 +354,7 @@ class WegWindow(Gtk.ApplicationWindow):
                 app.quit()
             return True
 
-        if keyval in (Gdk.KEY_asciitilde, Gdk.KEY_tilde):
+        if keyval in (Gdk.KEY_asciitilde, Gdk.KEY_dead_tilde):
             self.navigate_to(os.path.expanduser("~"))
             return True
 
