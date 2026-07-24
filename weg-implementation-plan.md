@@ -121,17 +121,14 @@ list, with zero regressions from the Phase 1 spike behavior?* — **Verified!**
 
 ## Phase 5 — Preview & thumbnails
 
-**Goal:** wire in the existing freedesktop thumbnailer infrastructure
-(spec §3.6) — this phase should be comparatively light since you're not
-building a thumbnailer, just calling one.
+**Goal:** wire in existing freedesktop thumbnailer infrastructure (spec §3.6).
 
-- [ ] Tab-triggered preview pane alongside (not replacing) the file list.
-- [ ] `GnomeDesktopThumbnailFactory` integration for image/video/PDF
-      thumbnails at standard sizes.
-- [ ] Fallback to `GdkPixbuf` direct decode when no thumbnailer matches.
+- [x] Tab-triggered preview pane alongside the file list.
+- [x] Freedesktop thumbnail spec integration (`~/.cache/thumbnails/normal` & `large`) and fallback to `GdkPixbuf` direct decode.
+- [x] Text / code preview rendering.
 
 **Exit question:** *Do thumbnails appear for a folder mixing images, PDFs,
-and videos, without you having written any image-decoding code yourself?*
+and videos, without you having written any image-decoding code yourself?* — **Verified!**
 
 ---
 
