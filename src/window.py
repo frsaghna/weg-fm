@@ -1,17 +1,5 @@
 """
-Main application window for weg with exact nnn-style keyboard navigation:
-  h / Left   : Parent directory
-  l / Right  : Enter directory / open file
-  j / Down   : Next item
-  k / Up     : Previous item
-  g / Home   : First item in list
-  G / End    : Last item in list
-  . / Ctrl+H : Toggle hidden files
-  ~          : Home directory
-  q          : Quit application
-  /          : Filter mode
-  >          : Recursive search mode
-  :          : Command mode
+Main application window for weg with clean TUI aesthetics and nnn-style keyboard navigation.
 """
 
 import os
@@ -29,11 +17,15 @@ from src.file_list import FileListWidget
 from src.preview_pane import PreviewPaneWidget
 from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
+from src.style import apply_tui_theme
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
         super().__init__(application=app, title="weg")
         self.set_default_size(850, 550)
+
+        # Apply TUI theme CSS
+        apply_tui_theme()
 
         if not initial_dir or not os.path.exists(initial_dir):
             initial_dir = os.path.expanduser("~")
@@ -62,6 +54,7 @@ class WegWindow(Gtk.ApplicationWindow):
         content_box.append(self.file_list)
 
         self.preview_pane = PreviewPaneWidget()
+        self.preview_pane.add_css_class("preview-pane")
         self.preview_pane.set_visible(False)
         content_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
         content_box.append(self.preview_pane)
@@ -71,10 +64,7 @@ class WegWindow(Gtk.ApplicationWindow):
 
         # 3. Status Bar
         self.status_bar = Gtk.Label(label="Ready", xalign=0.0)
-        self.status_bar.set_margin_top(4)
-        self.status_bar.set_margin_bottom(4)
-        self.status_bar.set_margin_start(12)
-        self.status_bar.set_margin_end(12)
+        self.status_bar.add_css_class("status-bar")
         main_box.append(self.status_bar)
 
         # 4. Command Bar
@@ -342,7 +332,6 @@ class WegWindow(Gtk.ApplicationWindow):
             self.permanent_delete_selection()
 
         else:
-            # Fallback: Execute shell command in current directory
             try:
                 res = subprocess.run(cmd_text, shell=True, cwd=self.current_dir, capture_output=True, text=True)
                 msg = res.stdout.strip() or res.stderr.strip() or f"Command exit code: {res.returncode}"
@@ -359,69 +348,56 @@ class WegWindow(Gtk.ApplicationWindow):
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
 
-        # nnn navigation: q -> quit app
         if keyval == Gdk.KEY_q and not ctrl_pressed:
             app = self.get_application()
             if app:
                 app.quit()
             return True
 
-        # nnn navigation: ~ -> Home directory
         if keyval in (Gdk.KEY_asciitilde, Gdk.KEY_tilde):
             self.navigate_to(os.path.expanduser("~"))
             return True
 
-        # nnn navigation: . / Ctrl+H -> Toggle hidden files
         if (keyval == Gdk.KEY_period and not ctrl_pressed) or (ctrl_pressed and keyval in (Gdk.KEY_h, Gdk.KEY_H)):
             self.file_list.toggle_hidden_files()
             return True
 
-        # nnn navigation: g -> Jump to top (first item)
         if keyval == Gdk.KEY_g and not ctrl_pressed:
             self.file_list.jump_to_first()
             return True
 
-        # nnn navigation: G -> Jump to bottom (last item)
         if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_G:
             self.file_list.jump_to_last()
             return True
 
-        # Tab key: Toggle preview pane
         if keyval == Gdk.KEY_Tab:
             self.toggle_preview()
             return True
 
-        # Ctrl+C: Copy to clipboard
         if ctrl_pressed and (keyval in (Gdk.KEY_c, Gdk.KEY_C)):
             self.copy_selection_to_clipboard(action="copy")
             return True
 
-        # Ctrl+X: Cut to clipboard
         if ctrl_pressed and (keyval in (Gdk.KEY_x, Gdk.KEY_X)):
             self.copy_selection_to_clipboard(action="cut")
             return True
 
-        # Ctrl+V: Paste from clipboard
         if ctrl_pressed and (keyval in (Gdk.KEY_v, Gdk.KEY_V)):
             self.paste_from_clipboard()
             return True
 
-        # Shift+X: Permanent delete with confirmation
         if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_X:
             self.permanent_delete_selection()
             return True
 
-        # x: Move to Trash (GIO Trash API)
         if keyval == Gdk.KEY_x and not ctrl_pressed:
             self.move_selection_to_trash()
             return True
 
-        # Ctrl+L: Direct path editing
         if ctrl_pressed and (keyval in (Gdk.KEY_l, Gdk.KEY_L)):
             self.path_bar.start_editing()
             return True
 
-        # Command mode triggers: /, >, :
         if keyval == Gdk.KEY_slash:
             self.command_bar.activate_mode('/')
             return True
@@ -432,32 +408,26 @@ class WegWindow(Gtk.ApplicationWindow):
             self.command_bar.activate_mode(':')
             return True
 
-        # Space: Toggle multi-selection on focused item
         elif keyval == Gdk.KEY_space:
             self.file_list.toggle_selection_focused()
             return True
 
-        # r: Quick inline rename
         elif keyval == Gdk.KEY_r and not ctrl_pressed:
             self.command_bar.activate_mode(':', initial_text="rename ")
             return True
 
-        # nnn Navigation: Up (k / UpArrow)
         elif keyval in (Gdk.KEY_Up, Gdk.KEY_k):
             self.file_list.move_selection(-1)
             return True
 
-        # nnn Navigation: Down (j / DownArrow)
         elif keyval in (Gdk.KEY_Down, Gdk.KEY_j):
             self.file_list.move_selection(1)
             return True
 
-        # nnn Navigation: Open / Enter dir (l / RightArrow / Enter)
         elif keyval in (Gdk.KEY_Right, Gdk.KEY_l, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             self.file_list.activate_selected()
             return True
 
-        # nnn Navigation: Parent dir (h / LeftArrow / BackSpace)
         elif keyval in (Gdk.KEY_Left, Gdk.KEY_h, Gdk.KEY_BackSpace):
             parent = os.path.dirname(self.current_dir)
             if parent and parent != self.current_dir:

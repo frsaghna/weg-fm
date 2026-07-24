@@ -1,5 +1,5 @@
 """
-Path bar widget supporting breadcrumb display and direct Ctrl+L editing.
+Path bar widget supporting breadcrumb display and direct Ctrl+L editing with TUI styling.
 """
 
 import os
@@ -11,17 +11,20 @@ from gi.repository import Gtk, Gdk
 class PathBarWidget(Gtk.Box):
     def __init__(self, on_navigate):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.set_margin_top(8)
-        self.set_margin_bottom(8)
-        self.set_margin_start(12)
-        self.set_margin_end(12)
+        self.add_css_class("path-bar")
 
         self.on_navigate = on_navigate
         self.current_path = ""
         self.editing = False
 
+        # Brand Badge
+        self.brand_label = Gtk.Label(label="[ weg ]")
+        self.brand_label.add_css_class("mode-badge")
+        self.append(self.brand_label)
+
         # Path Display Label
         self.path_label = Gtk.Label(label="", xalign=0.0)
+        self.path_label.add_css_class("path-label")
         self.path_label.set_hexpand(True)
         self.append(self.path_label)
 
@@ -31,7 +34,6 @@ class PathBarWidget(Gtk.Box):
         self.path_entry.set_visible(False)
         self.path_entry.connect("activate", self._on_entry_activate)
         
-        # Key controller for entry Esc key
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_entry_key_pressed)
         self.path_entry.add_controller(key_ctrl)
@@ -50,7 +52,6 @@ class PathBarWidget(Gtk.Box):
         self.path_label.set_visible(False)
         self.path_entry.set_visible(True)
         self.path_entry.grab_focus()
-        # Select all text in entry for quick replacement
         self.path_entry.select_region(0, -1)
 
     def stop_editing(self):

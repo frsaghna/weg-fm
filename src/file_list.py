@@ -1,5 +1,5 @@
 """
-File list widget using GTK4 Gtk.ListBox with multi-select, live filtering (/),
+File list widget using GTK4 Gtk.ListBox with TUI styling, multi-select, live filtering (/),
 recursive search (>), hidden files toggle, and nnn-style navigation.
 """
 
@@ -14,12 +14,13 @@ gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk, Gio, GLib
 
 class FileItem:
-    def __init__(self, name, path, is_dir, size=0, display_path=None):
+    def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False):
         self.name = name
         self.path = path
         self.is_dir = is_dir
         self.size = size
         self.display_path = display_path or name
+        self.is_exec = is_exec
 
 class FileListWidget(Gtk.ScrolledWindow):
     def __init__(self, on_open_directory, on_status_change):
@@ -106,7 +107,7 @@ class FileListWidget(Gtk.ScrolledWindow):
 
         try:
             enumerator = gfile.enumerate_children(
-                "standard::name,standard::type,standard::size",
+                "standard::name,standard::type,standard::size,access::can-execute",
                 Gio.FileQueryInfoFlags.NONE,
                 None
             )
@@ -120,9 +121,10 @@ class FileListWidget(Gtk.ScrolledWindow):
             name = info.get_name()
             ftype = info.get_file_type()
             is_dir = (ftype == Gio.FileType.DIRECTORY)
+            is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
             size = info.get_size()
             item_path = os.path.join(path, name)
-            new_items.append(FileItem(name, item_path, is_dir, size))
+            new_items.append(FileItem(name, item_path, is_dir, size, is_exec=is_exec))
             info = enumerator.next_file(None)
 
         enumerator.close(None)
@@ -169,13 +171,15 @@ class FileListWidget(Gtk.ScrolledWindow):
         for p in lines[:200]:
             rel_path = os.path.relpath(p, self.current_dir)
             is_dir = os.path.isdir(p)
+            is_exec = os.access(p, os.X_OK) if not is_dir and os.path.exists(p) else False
             size = os.path.getsize(p) if not is_dir and os.path.exists(p) else 0
             search_items.append(FileItem(
                 name=os.path.basename(p),
                 path=p,
                 is_dir=is_dir,
                 size=size,
-                display_path=rel_path
+                display_path=rel_path,
+                is_exec=is_exec
             ))
 
         search_items.sort(key=lambda item: (not item.is_dir, item.display_path.lower()))
@@ -191,25 +195,36 @@ class FileListWidget(Gtk.ScrolledWindow):
 
         for item in items:
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            row_box.set_margin_top(4)
-            row_box.set_margin_bottom(4)
+            row_box.set_margin_top(3)
+            row_box.set_margin_bottom(3)
             row_box.set_margin_start(8)
             row_box.set_margin_end(8)
 
             is_selected = item.path in self.selected_paths
-            sel_prefix = "[x] " if is_selected else "[ ] "
-            dir_prefix = "📁 " if item.is_dir else "   "
+            sel_text = "[x] " if is_selected else "[ ] "
+            sel_label = Gtk.Label(label=sel_text)
+            if is_selected:
+                sel_label.add_css_class("selected-checkbox")
+            row_box.append(sel_label)
+
+            dir_prefix = "📁 " if item.is_dir else ("⚡ " if item.is_exec else "   ")
             disp = item.display_path if hasattr(item, 'display_path') else item.name
-            label_text = f"{sel_prefix}{dir_prefix}{disp}{'/' if item.is_dir else ''}"
+            label_text = f"{dir_prefix}{disp}{'/' if item.is_dir else ('*' if item.is_exec else '')}"
 
             lbl = Gtk.Label(label=label_text, xalign=0.0)
+            if item.is_dir:
+                lbl.add_css_class("dir-item")
+            elif item.is_exec:
+                lbl.add_css_class("exec-item")
+            else:
+                lbl.add_css_class("file-item")
+
             row_box.append(lbl)
 
             row = Gtk.ListBoxRow()
             row.set_child(row_box)
             row.item_data = item
 
-            # Add DragSource controller to each row (Drag OUT to Nautilus)
             drag_source = Gtk.DragSource.new()
             drag_source.set_actions(Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
             drag_source.connect("prepare", self._on_drag_prepare, item)

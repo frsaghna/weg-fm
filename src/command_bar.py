@@ -1,18 +1,13 @@
 """
-Command line widget and grammar handler for weg.
-Handles prefixes:
-  '/' -> Instant local current-dir filter
-  '>' -> Recursive search via fd (tiered depth)
-  ':' -> Command mode (:mkdir, :touch, :rename, :delete, or raw shell commands)
+Command line widget and grammar handler for weg with TUI mode badges.
 """
 
 import os
-import subprocess
 import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
-from gi.repository import Gtk, Gdk, GLib
+from gi.repository import Gtk, Gdk
 
 class CommandBarWidget(Gtk.Box):
     def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel):
@@ -29,10 +24,14 @@ class CommandBarWidget(Gtk.Box):
 
         self.mode = None # None, '/', '>', ':'
 
+        self.badge_label = Gtk.Label(label="NORMAL")
+        self.badge_label.add_css_class("mode-badge")
+        self.append(self.badge_label)
+
         self.prefix_label = Gtk.Label(label=":")
         self.entry = Gtk.Entry()
         self.entry.set_hexpand(True)
-        self.entry.set_placeholder_text("Press /, >, or : for commands...")
+        self.entry.set_placeholder_text("Press /, >, or : for commands (h/j/k/l to navigate)")
 
         self.append(self.prefix_label)
         self.append(self.entry)
@@ -44,25 +43,45 @@ class CommandBarWidget(Gtk.Box):
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.entry.add_controller(key_ctrl)
 
+        self._update_badge()
+
     def activate_mode(self, prefix, initial_text=""):
         self.mode = prefix
         self.prefix_label.set_text(prefix)
         self.entry.set_text(initial_text)
         self.entry.set_position(-1)
         self.entry.grab_focus()
+        self._update_badge()
 
     def deactivate(self, keep_filter=False):
         self.mode = None
         self.prefix_label.set_text(":")
         self.entry.set_text("")
-        self.entry.set_placeholder_text("Press /, >, or : for commands...")
+        self.entry.set_placeholder_text("Press /, >, or : for commands (h/j/k/l to navigate)")
+        self._update_badge()
         if self.on_cancel:
             self.on_cancel(keep_filter=keep_filter)
+
+    def _update_badge(self):
+        # Remove existing mode CSS classes
+        for cls in ("mode-badge-filter", "mode-badge-search", "mode-badge-cmd"):
+            self.badge_label.remove_css_class(cls)
+
+        if self.mode == '/':
+            self.badge_label.set_text("FILTER")
+            self.badge_label.add_css_class("mode-badge-filter")
+        elif self.mode == '>':
+            self.badge_label.set_text("SEARCH")
+            self.badge_label.add_css_class("mode-badge-search")
+        elif self.mode == ':':
+            self.badge_label.set_text("CMD")
+            self.badge_label.add_css_class("mode-badge-cmd")
+        else:
+            self.badge_label.set_text("NORMAL")
 
     def _on_changed(self, entry):
         text = entry.get_text()
 
-        # Auto-detect mode prefix if user typed directly into entry
         if not self.mode and text:
             if text.startswith('/'):
                 self.mode = '/'
@@ -70,6 +89,7 @@ class CommandBarWidget(Gtk.Box):
                 text = text[1:]
                 entry.set_text(text)
                 entry.set_position(-1)
+                self._update_badge()
                 return
             elif text.startswith('>'):
                 self.mode = '>'
@@ -77,6 +97,7 @@ class CommandBarWidget(Gtk.Box):
                 text = text[1:]
                 entry.set_text(text)
                 entry.set_position(-1)
+                self._update_badge()
                 return
             elif text.startswith(':'):
                 self.mode = ':'
@@ -84,11 +105,12 @@ class CommandBarWidget(Gtk.Box):
                 text = text[1:]
                 entry.set_text(text)
                 entry.set_position(-1)
+                self._update_badge()
                 return
             else:
-                # Default to filter mode if typing without explicit prefix
                 self.mode = '/'
                 self.prefix_label.set_text('/')
+                self._update_badge()
 
         if self.mode == '/':
             self.on_filter_change(text)
@@ -107,7 +129,6 @@ class CommandBarWidget(Gtk.Box):
                 self.on_command_execute(text)
             self.deactivate(keep_filter=False)
         elif current_mode in ('/', '>'):
-            # Return focus to file list while retaining filter/search
             self.deactivate(keep_filter=True)
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
