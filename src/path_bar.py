@@ -40,42 +40,33 @@ class PathBarWidget(Gtk.Box):
         self.path_entry.add_controller(key_ctrl)
         self.append(self.path_entry)
 
-        # Right: nnn-Style Context / Tab Indicator Box
-        self.context_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
-        self.context_box.set_halign(Gtk.Align.END)
-        self.context_buttons = {}
+        # Right: Simple Tight Context Indicator Label e.g. "[1] 2 3 4 5 6 7 8"
+        self.context_label = Gtk.Label(label="", xalign=1.0)
+        self.context_label.add_css_class("context-indicator")
+        
+        click_gesture = Gtk.GestureClick()
+        click_gesture.connect("pressed", self._on_context_label_clicked)
+        self.context_label.add_controller(click_gesture)
 
-        for c_id in range(1, 9):
-            lbl = Gtk.Label(label=str(c_id))
-            lbl.add_css_class("key-cap")
-            
-            click_gesture = Gtk.GestureClick()
-            click_gesture.connect("pressed", self._create_context_click_handler(c_id))
-            lbl.add_controller(click_gesture)
-
-            self.context_box.append(lbl)
-            self.context_buttons[c_id] = lbl
-
-        self.append(self.context_box)
+        self.append(self.context_label)
         self.update_contexts(active_id=1)
 
-    def _create_context_click_handler(self, c_id):
-        def _handler(gesture, n_press, x, y):
-            if self.on_context_click:
-                self.on_context_click(c_id)
-        return _handler
+    def _on_context_label_clicked(self, gesture, n_press, x, y):
+        width = self.context_label.get_width()
+        if width > 0 and self.on_context_click:
+            # Calculate rough click position for 1-8
+            ratio = max(0.0, min(1.0, x / float(width)))
+            target_id = max(1, min(8, int(ratio * 8) + 1))
+            self.on_context_click(target_id)
 
     def update_contexts(self, active_id=1):
-        for c_id, lbl in self.context_buttons.items():
-            for cls in ("mode-badge", "selected-checkbox", "key-cap", "path-badge"):
-                lbl.remove_css_class(cls)
-
+        parts = []
+        for c_id in range(1, 9):
             if c_id == active_id:
-                lbl.set_label(f"[{c_id}]")
-                lbl.add_css_class("mode-badge")
+                parts.append(f"[{c_id}]")
             else:
-                lbl.set_label(f" {c_id} ")
-                lbl.add_css_class("key-cap")
+                parts.append(f"{c_id}")
+        self.context_label.set_text(" ".join(parts))
 
     def set_path(self, path):
         self.current_path = os.path.abspath(path)

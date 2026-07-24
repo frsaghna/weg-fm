@@ -242,6 +242,13 @@ window {{
     font-size: 12px;
 }}
 
+.context-indicator {{
+    color: {palette['dir_color']};
+    font-weight: bold;
+    font-size: 11px;
+    padding-left: 8px;
+}}
+
 entry {{
     background-color: {palette['header_bg']};
     color: {palette['entry_fg']};
