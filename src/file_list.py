@@ -1,6 +1,7 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
-  - Universal Unicode filetype symbols (no Nerd Font dependency required)
+  - Customizable iconsets ('nerdfont', 'minimal', 'unicode')
+  - Minimalist monochrome Nerd Font glyphs (default)
   - Neovim cursorline highlighting
   - Half-page jumping (Ctrl+D / Ctrl+U)
   - Hidden files toggle (.)
@@ -16,38 +17,79 @@ gi.require_version('Gio', '2.0')
 gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk, Gio, GLib
 
+# Icon Sets
+ICON_SETS = {
+    "nerdfont": {
+        "dir": "󰉋",
+        "exec": "⚡",
+        "python": "",
+        "doc": "󰍔",
+        "config": "󰅩",
+        "image": "󰋩",
+        "archive": "",
+        "script": "",
+        "code": "",
+        "file": "󰈔",
+    },
+    "minimal": {
+        "dir": "▸",
+        "exec": "*",
+        "python": "·",
+        "doc": "·",
+        "config": "·",
+        "image": "·",
+        "archive": "·",
+        "script": "·",
+        "code": "·",
+        "file": "·",
+    },
+    "unicode": {
+        "dir": "📁",
+        "exec": "⚡",
+        "python": "🐍",
+        "doc": "📝",
+        "config": "⚙️",
+        "image": "🖼️",
+        "archive": "📦",
+        "script": "📜",
+        "code": "💻",
+        "file": "📄",
+    }
+}
+
 class FileItem:
-    def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False):
+    def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False, iconset="nerdfont"):
         self.name = name
         self.path = path
         self.is_dir = is_dir
         self.size = size
         self.display_path = display_path or name
         self.is_exec = is_exec
-        self.icon = self._resolve_icon()
+        self.icon = self._resolve_icon(iconset)
 
-    def _resolve_icon(self):
+    def _resolve_icon(self, iconset_name):
+        palette = ICON_SETS.get(iconset_name, ICON_SETS["nerdfont"])
         if self.is_dir:
-            return "📁" # Directory
+            return palette["dir"]
         if self.is_exec:
-            return "⚡" # Executable
+            return palette["exec"]
         
         ext = os.path.splitext(self.name)[1].lower()
         if ext in ('.py', '.pyw'):
-            return "🐍" # Python
+            return palette["python"]
         elif ext in ('.md', '.markdown', '.txt', '.doc', '.docx', '.pdf'):
-            return "📝" # Document
+            return palette["doc"]
         elif ext in ('.json', '.yaml', '.yml', '.toml', '.edn', '.ini', '.conf'):
-            return "⚙️" # Config / Data
+            return palette["config"]
         elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp'):
-            return "🖼️" # Image
+            return palette["image"]
         elif ext in ('.zip', '.tar', '.gz', '.bz2', '.7z', '.xz', '.rar'):
-            return "📦" # Archive
+            return palette["archive"]
         elif ext in ('.sh', '.bash', '.zsh', '.fish'):
-            return "📜" # Script
+            return palette["script"]
         elif ext in ('.rs', '.c', '.cpp', '.h', '.go', '.js', '.ts', '.html', '.css'):
-            return "💻" # Code source
-        return "📄" # Generic File
+            return palette["code"]
+        return palette["file"]
 
 class FileListWidget(Gtk.ScrolledWindow):
     def __init__(self, on_open_directory, on_status_change):
@@ -59,6 +101,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.on_status_change = on_status_change
         self.current_dir = ""
         self.show_hidden = False
+        self.iconset = "nerdfont"
         self.all_items = []
         self.displayed_items = []
         self.selected_paths = set()
@@ -78,6 +121,14 @@ class FileListWidget(Gtk.ScrolledWindow):
         drop_target.connect("enter", self._on_drop_enter)
         drop_target.connect("drop", self._on_drop)
         self.add_controller(drop_target)
+
+    def set_iconset(self, name):
+        if name in ICON_SETS:
+            self.iconset = name
+            if self.current_dir:
+                self.load_directory(self.current_dir)
+            return True, f"Icon set changed to '{name}'"
+        return False, f"Unknown icon set '{name}'. Available: {', '.join(ICON_SETS.keys())}"
 
     def toggle_hidden_files(self):
         self.show_hidden = not self.show_hidden
@@ -151,7 +202,7 @@ class FileListWidget(Gtk.ScrolledWindow):
             is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
             size = info.get_size()
             item_path = os.path.join(path, name)
-            new_items.append(FileItem(name, item_path, is_dir, size, is_exec=is_exec))
+            new_items.append(FileItem(name, item_path, is_dir, size, is_exec=is_exec, iconset=self.iconset))
             info = enumerator.next_file(None)
 
         enumerator.close(None)
@@ -206,7 +257,8 @@ class FileListWidget(Gtk.ScrolledWindow):
                 is_dir=is_dir,
                 size=size,
                 display_path=rel_path,
-                is_exec=is_exec
+                is_exec=is_exec,
+                iconset=self.iconset
             ))
 
         search_items.sort(key=lambda item: (not item.is_dir, item.display_path.lower()))

@@ -306,6 +306,14 @@ class WegWindow(Gtk.ApplicationWindow):
                 self.update_status(msg)
             return
 
+        if verb in ("icon", "icons", "iconset"):
+            if not arg:
+                self.update_status(f"Current iconset: '{self.file_list.iconset}'. Available: nerdfont, minimal, unicode")
+            else:
+                ok, msg = self.file_list.set_iconset(arg)
+                self.update_status(msg)
+            return
+
         if verb in ("q", "quit"):
             app = self.get_application()
             if app:
