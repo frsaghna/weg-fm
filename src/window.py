@@ -1,7 +1,7 @@
 """
 Main application window for weg.
-Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L, Tab preview),
-and handles file operations, clipboard, and preview pane.
+Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L, Tab preview, x, Shift+X),
+and handles file operations, GIO trash, permanent deletion safety, clipboard, and preview pane.
 """
 
 import os
@@ -40,7 +40,7 @@ class WegWindow(Gtk.ApplicationWindow):
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # 2. Middle Content Area (File List + Tab-toggled Preview Pane)
+        # 2. Content Area
         content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         content_box.set_vexpand(True)
 
@@ -66,7 +66,7 @@ class WegWindow(Gtk.ApplicationWindow):
         self.status_bar.set_margin_end(12)
         main_box.append(self.status_bar)
 
-        # 4. Command Bar (persistent at bottom)
+        # 4. Command Bar
         self.command_bar = CommandBarWidget(
             on_filter_change=self.file_list.filter_local,
             on_search_query=self.file_list.search_recursive,
@@ -77,7 +77,6 @@ class WegWindow(Gtk.ApplicationWindow):
 
         self.set_child(main_box)
 
-        # Keyboard Navigation Controller
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.add_controller(key_ctrl)
@@ -123,6 +122,64 @@ class WegWindow(Gtk.ApplicationWindow):
         if not keep_filter:
             self.file_list.load_directory(self.current_dir)
         self.file_list.grab_focus()
+
+    def move_selection_to_trash(self):
+        """'x': Move selection to Trash via GIO trash API."""
+        targets = self.file_list.get_target_files()
+        if not targets:
+            return
+
+        trashed_count = 0
+        for path in targets:
+            try:
+                gfile = Gio.File.new_for_path(path)
+                gfile.trash(None)
+                trashed_count += 1
+            except Exception as e:
+                print(f"[Window] Trash error for {path}: {e}")
+
+        self.file_list.load_directory(self.current_dir)
+        self.update_status(f"Moved {trashed_count} item(s) to Trash")
+
+    def permanent_delete_selection(self, confirm_bypass=False):
+        """'Shift+X': Permanently delete selection with data safety confirmation."""
+        targets = self.file_list.get_target_files()
+        if not targets:
+            return
+
+        if not confirm_bypass:
+            dialog = Gtk.AlertDialog()
+            dialog.set_message("Permanently Delete?")
+            dialog.set_detail(f"Are you sure you want to permanently delete {len(targets)} item(s)? This action cannot be undone.")
+            dialog.set_buttons(["Cancel", "Permanently Delete"])
+            dialog.set_cancel_button(0)
+            dialog.set_default_button(1)
+            dialog.choose(self, None, self._on_confirm_delete_chosen, targets)
+        else:
+            self._do_permanent_delete(targets)
+
+    def _on_confirm_delete_chosen(self, dialog, result, targets):
+        try:
+            choice = dialog.choose_finish(result)
+            if choice == 1:
+                self._do_permanent_delete(targets)
+        except Exception as e:
+            print(f"[Window] Dialog error: {e}")
+
+    def _do_permanent_delete(self, targets):
+        deleted_count = 0
+        for t in targets:
+            try:
+                if os.path.isdir(t):
+                    shutil.rmtree(t, ignore_errors=True)
+                elif os.path.exists(t):
+                    os.remove(t)
+                deleted_count += 1
+            except Exception as e:
+                print(f"[Window] Delete error for {t}: {e}")
+
+        self.file_list.load_directory(self.current_dir)
+        self.update_status(f"Permanently deleted {deleted_count} item(s)")
 
     def copy_selection_to_clipboard(self, action="copy"):
         targets = self.file_list.get_target_files()
@@ -257,12 +314,7 @@ class WegWindow(Gtk.ApplicationWindow):
                     os.rename(old_path, new_path)
 
         elif verb in ("delete", "rm"):
-            targets = self.file_list.get_target_files()
-            for t in targets:
-                if os.path.isdir(t):
-                    shutil.rmtree(t, ignore_errors=True)
-                elif os.path.exists(t):
-                    os.remove(t)
+            self.permanent_delete_selection()
 
         self.file_list.load_directory(self.current_dir)
 
@@ -291,6 +343,16 @@ class WegWindow(Gtk.ApplicationWindow):
         # Ctrl+V: Paste from clipboard
         if ctrl_pressed and (keyval in (Gdk.KEY_v, Gdk.KEY_V)):
             self.paste_from_clipboard()
+            return True
+
+        # Shift+X: Permanent delete with confirmation
+        if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_X:
+            self.permanent_delete_selection()
+            return True
+
+        # x: Move to Trash (GIO Trash API)
+        if keyval == Gdk.KEY_x and not ctrl_pressed:
+            self.move_selection_to_trash()
             return True
 
         # Ctrl+L: Direct path editing
