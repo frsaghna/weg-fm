@@ -25,13 +25,28 @@ SECTIONS = [
         ]
     ),
     (
-        "COMMAND BAR & GRAMMAR",
+        "COMMAND BAR PREFIXES",
         [
             ("/", "Instant local current-directory filter"),
             (">", "Recursive search via fd (<15ms response)"),
-            (":", "Command mode (:mkdir, :touch, :rename, :delete, shell)"),
+            (":", "Command mode (type commands below)"),
             ("r", "Quick inline rename / batch pattern rename"),
             ("Esc", "Cancel filter/search/command mode"),
+        ]
+    ),
+    (
+        "BUILT-IN ':' COMMANDS",
+        [
+            (":mkdir <name>", "Create a new folder in current directory"),
+            (":touch <name>", "Create a new empty file in current directory"),
+            (":new folder <name>", "Create a new folder (alias for :mkdir)"),
+            (":new file <name>", "Create a new file (alias for :touch)"),
+            (":rename <new_name>", "Rename selection (supports '{n}' for batch numbering)"),
+            (":delete  /  :rm", "Permanently delete active selection"),
+            (":theme", "List active and available TUI themes"),
+            (":theme <name>", "Switch theme (catppuccin, nord, tokyonight, gruvbox, dracula, matrix)"),
+            (":help  /  :hint", "Open this keybinding & command cheat sheet"),
+            ("<any_shell_cmd>", "Execute shell command in current directory (e.g. :chmod +x script.sh)"),
         ]
     ),
     (
@@ -56,10 +71,10 @@ SECTIONS = [
 
 class HelpOverlayWindow(Gtk.Window):
     def __init__(self, parent_win):
-        super().__init__(title="weg — Keybinding Cheat Sheet")
+        super().__init__(title="weg — Keybindings & Command Reference")
         self.set_transient_for(parent_win)
         self.set_modal(True)
-        self.set_default_size(680, 520)
+        self.set_default_size(720, 560)
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         main_box.set_margin_top(16)
@@ -71,7 +86,7 @@ class HelpOverlayWindow(Gtk.Window):
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         brand = Gtk.Label(label="[ weg ]")
         brand.add_css_class("mode-badge")
-        title = Gtk.Label(label="KEYBINDINGS CHEAT SHEET", xalign=0.0)
+        title = Gtk.Label(label="KEYBINDINGS & COMMAND REFERENCE", xalign=0.0)
         title.add_css_class("path-label")
 
         header_box.append(brand)
