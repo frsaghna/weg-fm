@@ -1,6 +1,6 @@
 """
 Minimal TUI Delete Confirmation Dialog for weg.
-Fits content tightly and uses intuitive button selection states.
+Uses the active iconset from FileListWidget for file/folder icons.
 """
 
 import os
@@ -8,6 +8,8 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gdk
+
+from src.file_list import FileItem
 
 class DeleteConfirmWindow(Gtk.Window):
     def __init__(self, parent_win, targets, on_confirm):
@@ -17,6 +19,10 @@ class DeleteConfirmWindow(Gtk.Window):
         self.set_default_size(400, 110)
         self.targets = targets
         self.on_confirm = on_confirm
+
+        iconset = "nerdfont"
+        if parent_win and hasattr(parent_win, 'file_list') and hasattr(parent_win.file_list, 'iconset'):
+            iconset = parent_win.file_list.iconset
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         main_box.set_margin_top(10)
@@ -30,13 +36,14 @@ class DeleteConfirmWindow(Gtk.Window):
         title_lbl.add_css_class("path-label")
         main_box.append(title_lbl)
 
-        # File preview list
+        # File preview list with dynamic icon resolution matching active iconset
         preview_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         for p in targets[:3]:
             is_dir = os.path.isdir(p)
             name = os.path.basename(p) or p
-            lbl = Gtk.Label(label=f"  {'📁' if is_dir else '📄'} {name}{'/' if is_dir else ''}", xalign=0.0)
-            lbl.add_css_class("file-item")
+            item = FileItem(name, p, is_dir, iconset=iconset)
+            lbl = Gtk.Label(label=f"  {item.icon}  {name}{'/' if is_dir else ''}", xalign=0.0)
+            lbl.add_css_class("dir-item" if is_dir else "file-item")
             preview_box.append(lbl)
 
         if len(targets) > 3:
