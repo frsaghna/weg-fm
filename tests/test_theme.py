@@ -51,6 +51,9 @@ class TestThemeEngine(unittest.TestCase):
         win.command_bar._on_activate(win.command_bar.entry)
         self.assertEqual(get_current_theme(), "tokyonight")
 
+        # Test :theme (without args) opens interactive Theme Picker Window
+        win.execute_command("theme")
+
         # Test invalid theme name
         win.execute_command("theme invalid_name")
         self.assertIn("Unknown theme", win.status_bar.get_text())

@@ -1,6 +1,6 @@
 """
 Main application window for weg with clean TUI aesthetics, nnn-style keyboard navigation,
-theme switcher (:theme), and interactive '?' help overlay.
+theme engine (:theme), interactive theme picker, and interactive '?' help overlay.
 """
 
 import os
@@ -19,6 +19,7 @@ from src.preview_pane import PreviewPaneWidget
 from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
 from src.help_dialog import show_help_overlay
+from src.theme_dialog import show_theme_picker
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 
 class WegWindow(Gtk.ApplicationWindow):
@@ -119,6 +120,9 @@ class WegWindow(Gtk.ApplicationWindow):
 
     def show_help(self):
         show_help_overlay(self)
+
+    def show_themes(self):
+        show_theme_picker(self)
 
     def _on_directory_changed(self):
         if self.current_dir and not self.command_bar.mode:
@@ -284,11 +288,9 @@ class WegWindow(Gtk.ApplicationWindow):
             self.show_help()
             return
 
-        if verb == "theme":
-            if not arg:
-                curr = get_current_theme()
-                avail = ", ".join(get_available_themes())
-                self.update_status(f"Current theme: '{curr}'. Available: {avail}")
+        if verb in ("theme", "themes"):
+            if not arg or arg in ("select", "menu"):
+                self.show_themes()
             else:
                 ok, msg = set_theme(arg)
                 self.update_status(msg)
