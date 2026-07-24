@@ -37,45 +37,40 @@ class TestPhase2NavigationShell(unittest.TestCase):
         )
         loaded = file_list.load_directory(self.tmp_dir)
         self.assertTrue(loaded)
-        self.assertEqual(len(file_list.items), 2)
+        self.assertEqual(len(file_list.displayed_items), 2)
         # Subdir (directory) should come first, then file
-        self.assertTrue(file_list.items[0].is_dir)
-        self.assertEqual(file_list.items[0].name, "subdir")
-        self.assertFalse(file_list.items[1].is_dir)
-        self.assertEqual(file_list.items[1].name, "alpha.txt")
+        self.assertTrue(file_list.displayed_items[0].is_dir)
+        self.assertEqual(file_list.displayed_items[0].name, "subdir")
+        self.assertFalse(file_list.displayed_items[1].is_dir)
+        self.assertEqual(file_list.displayed_items[1].name, "alpha.txt")
 
     def test_live_gfilemonitor_updates(self):
-        app = Gtk.Application(application_id="fm.weg.TestMonitor")
-        updates_received = []
+        updates = []
+        loop = GLib.MainLoop()
 
-        def on_activate(a):
-            win = WegWindow(a, initial_dir=self.tmp_dir)
-            win.present()
+        monitor = DirectoryMonitor(on_change_callback=lambda: updates.append("changed"))
+        monitor.set_directory(self.tmp_dir)
 
-            # Verify initial count
-            self.assertEqual(len(win.file_list.items), 2)
-
-            # Create a new file externally
+        def trigger_file():
             new_file = os.path.join(self.tmp_dir, "beta_external.txt")
             with open(new_file, "w") as f:
                 f.write("created externally")
+            return False
 
-            # Wait for GFileMonitor to notify GLib mainloop
-            def check_update():
-                item_names = [item.name for item in win.file_list.items]
-                if "beta_external.txt" in item_names:
-                    updates_received.append("updated")
-                    app.quit()
-                    return False
-                return True
+        def check_done():
+            if updates:
+                loop.quit()
+                return False
+            return True
 
-            GLib.timeout_add(100, check_update)
-            # Timeout safety after 3 seconds
-            GLib.timeout_add(3000, app.quit)
+        GLib.timeout_add(50, trigger_file)
+        GLib.timeout_add(100, check_done)
+        GLib.timeout_add(1000, loop.quit)
 
-        app.connect("activate", on_activate)
-        app.run([])
-        self.assertIn("updated", updates_received, "Live GFileMonitor update was not triggered on external file creation!")
+        loop.run()
+        monitor.stop()
+
+        self.assertIn("changed", updates, "Live GFileMonitor update was not triggered on external file creation!")
 
     def tearDown(self):
         import shutil

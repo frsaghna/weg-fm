@@ -1,6 +1,7 @@
 """
 Main application window for weg.
-Connects CommandBar (/ > :) and handles file operations.
+Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L),
+and handles file operations & clipboard integration.
 """
 
 import os
@@ -25,6 +26,9 @@ class WegWindow(Gtk.ApplicationWindow):
         if not initial_dir or not os.path.exists(initial_dir):
             initial_dir = os.path.expanduser("~")
         self.current_dir = os.path.abspath(initial_dir)
+
+        self.display = Gdk.Display.get_default()
+        self.clipboard = self.display.get_clipboard() if self.display else None
 
         self.monitor = DirectoryMonitor(self._on_directory_changed)
 
@@ -92,6 +96,93 @@ class WegWindow(Gtk.ApplicationWindow):
             self.file_list.load_directory(self.current_dir)
         self.file_list.grab_focus()
 
+    def copy_selection_to_clipboard(self, action="copy"):
+        targets = self.file_list.get_target_files()
+        if not targets or not self.clipboard:
+            return
+
+        uris = [Gio.File.new_for_path(p).get_uri() for p in targets]
+        payload_str = f"{action}\n" + "\n".join(uris) + "\0"
+        payload_bytes = payload_str.encode('utf-8')
+        gbytes = GLib.Bytes.new(payload_bytes)
+
+        gnome_provider = Gdk.ContentProvider.new_for_bytes("x-special/gnome-copied-files", gbytes)
+        gfiles = [Gio.File.new_for_path(p) for p in targets]
+        file_list = Gdk.FileList.new_from_list(gfiles)
+        file_list_provider = Gdk.ContentProvider.new_for_value(file_list)
+
+        union_provider = Gdk.ContentProvider.new_union([gnome_provider, file_list_provider])
+        self.clipboard.set_content(union_provider)
+        self.update_status(f"Clipboard: {action.upper()} {len(targets)} item(s)")
+
+    def paste_from_clipboard(self):
+        if not self.clipboard:
+            return
+
+        formats = self.clipboard.get_formats()
+        mime_types = formats.get_mime_types()
+
+        if "x-special/gnome-copied-files" in mime_types:
+            self.clipboard.read_async(["x-special/gnome-copied-files"], GLib.PRIORITY_DEFAULT, None, self._on_clipboard_read_done, None)
+        elif formats.contain_gtype(Gdk.FileList):
+            self.clipboard.read_value_async(Gdk.FileList, GLib.PRIORITY_DEFAULT, None, self._on_clipboard_file_list_done, None)
+
+    def _on_clipboard_read_done(self, clipboard, result, user_data):
+        try:
+            stream, mime_type = clipboard.read_finish(result)
+            if stream:
+                gbytes = stream.read_bytes(8192, None)
+                data = gbytes.get_data().decode('utf-8', errors='replace').rstrip('\x00')
+                lines = [l for l in data.split('\n') if l.strip()]
+                if not lines:
+                    return
+
+                action = lines[0].lower()
+                uris = lines[1:]
+                count = 0
+                for uri in uris:
+                    gfile = Gio.File.new_for_uri(uri)
+                    src_path = gfile.get_path()
+                    if src_path and os.path.exists(src_path):
+                        dest_name = os.path.basename(src_path)
+                        dest_path = os.path.join(self.current_dir, dest_name)
+                        if src_path == dest_path:
+                            continue
+                        if action == "cut":
+                            shutil.move(src_path, dest_path)
+                        else:
+                            if os.path.isdir(src_path):
+                                shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(src_path, dest_path)
+                        count += 1
+                self.file_list.load_directory(self.current_dir)
+                self.update_status(f"Pasted {count} item(s)")
+        except Exception as e:
+            print(f"[Window] Paste error: {e}")
+
+    def _on_clipboard_file_list_done(self, clipboard, result, user_data):
+        try:
+            val = clipboard.read_value_finish(result)
+            if isinstance(val, Gdk.FileList):
+                count = 0
+                for f in val.get_files():
+                    src_path = f.get_path()
+                    if src_path and os.path.exists(src_path):
+                        dest_name = os.path.basename(src_path)
+                        dest_path = os.path.join(self.current_dir, dest_name)
+                        if src_path == dest_path:
+                            continue
+                        if os.path.isdir(src_path):
+                            shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(src_path, dest_path)
+                        count += 1
+                self.file_list.load_directory(self.current_dir)
+                self.update_status(f"Pasted {count} item(s)")
+        except Exception as e:
+            print(f"[Window] Paste GdkFileList error: {e}")
+
     def execute_command(self, cmd_text):
         parts = cmd_text.split(maxsplit=1)
         if not parts:
@@ -112,7 +203,6 @@ class WegWindow(Gtk.ApplicationWindow):
                     target = os.path.join(self.current_dir, file_name)
                     open(target, "a").close()
             else:
-                # Default: create folder or file based on name
                 target = os.path.join(self.current_dir, arg)
                 if "." in arg:
                     open(target, "a").close()
@@ -125,12 +215,10 @@ class WegWindow(Gtk.ApplicationWindow):
                 return
 
             if len(targets) == 1:
-                # Single item rename
                 old_path = targets[0]
                 new_path = os.path.join(os.path.dirname(old_path), arg)
                 os.rename(old_path, new_path)
             else:
-                # Multi-select batch rename pattern (e.g. arg = "item_{n}")
                 for idx, old_path in enumerate(targets, 1):
                     ext = os.path.splitext(old_path)[1]
                     if "{n}" in arg:
@@ -156,6 +244,21 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+
+        # Ctrl+C: Copy to clipboard
+        if ctrl_pressed and (keyval in (Gdk.KEY_c, Gdk.KEY_C)):
+            self.copy_selection_to_clipboard(action="copy")
+            return True
+
+        # Ctrl+X: Cut to clipboard
+        if ctrl_pressed and (keyval in (Gdk.KEY_x, Gdk.KEY_X)):
+            self.copy_selection_to_clipboard(action="cut")
+            return True
+
+        # Ctrl+V: Paste from clipboard
+        if ctrl_pressed and (keyval in (Gdk.KEY_v, Gdk.KEY_V)):
+            self.paste_from_clipboard()
+            return True
 
         # Ctrl+L: Direct path editing
         if ctrl_pressed and (keyval in (Gdk.KEY_l, Gdk.KEY_L)):

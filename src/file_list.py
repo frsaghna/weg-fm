@@ -1,9 +1,10 @@
 """
 File list widget using GTK4 Gtk.ListBox with multi-select, live filtering (/),
-and recursive search (>) support.
+recursive search (>), AND native Drag & Drop (Phase 4).
 """
 
 import os
+import shutil
 import subprocess
 import gi
 
@@ -39,6 +40,52 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.list_box.connect("row-activated", self._on_row_activated)
         self.list_box.connect("row-selected", self._on_row_selected)
         self.set_child(self.list_box)
+
+        # Setup Gtk.DropTarget (Drag IN from Nautilus / external apps)
+        drop_target = Gtk.DropTarget.new(
+            type=Gdk.FileList,
+            actions=Gdk.DragAction.COPY | Gdk.DragAction.MOVE
+        )
+        drop_target.connect("enter", self._on_drop_enter)
+        drop_target.connect("drop", self._on_drop)
+        self.add_controller(drop_target)
+
+    def _on_drop_enter(self, target, x, y):
+        return Gdk.DragAction.COPY | Gdk.DragAction.MOVE
+
+    def _on_drop(self, target, value, x, y):
+        if not self.current_dir or not os.path.exists(self.current_dir):
+            return False
+
+        dropped_files = []
+        if isinstance(value, Gdk.FileList):
+            dropped_files = [f.get_path() for f in value.get_files() if f.get_path()]
+        elif hasattr(value, "get_files"):
+            dropped_files = [f.get_path() for f in value.get_files() if f.get_path()]
+
+        if not dropped_files:
+            return False
+
+        for src_path in dropped_files:
+            if not os.path.exists(src_path):
+                continue
+            dest_name = os.path.basename(src_path)
+            dest_path = os.path.join(self.current_dir, dest_name)
+            if src_path == dest_path:
+                continue
+            
+            try:
+                if os.path.isdir(src_path):
+                    if os.path.exists(dest_path):
+                        shutil.rmtree(dest_path, ignore_errors=True)
+                    shutil.copytree(src_path, dest_path)
+                else:
+                    shutil.copy2(src_path, dest_path)
+            except Exception as e:
+                print(f"[FileList] Drop copy error for {src_path}: {e}")
+
+        self.load_directory(self.current_dir)
+        return True
 
     def load_directory(self, path):
         path = os.path.abspath(path)
@@ -92,7 +139,6 @@ class FileListWidget(Gtk.ScrolledWindow):
             return
 
         self.is_search_mode = True
-        # Use tiered fd search strategy validated in Phase 1c (--max-depth 5 for fast responsive search)
         cmd = ["fd", "--hidden", "--exclude", ".git", "--max-depth", "5", query, self.current_dir]
         try:
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
@@ -102,7 +148,7 @@ class FileListWidget(Gtk.ScrolledWindow):
             return
 
         search_items = []
-        for p in lines[:200]: # limit to top 200 items for UI responsiveness
+        for p in lines[:200]:
             rel_path = os.path.relpath(p, self.current_dir)
             is_dir = os.path.isdir(p)
             size = os.path.getsize(p) if not is_dir and os.path.exists(p) else 0
@@ -144,6 +190,13 @@ class FileListWidget(Gtk.ScrolledWindow):
             row = Gtk.ListBoxRow()
             row.set_child(row_box)
             row.item_data = item
+
+            # Add DragSource controller to each row (Drag OUT to Nautilus)
+            drag_source = Gtk.DragSource.new()
+            drag_source.set_actions(Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
+            drag_source.connect("prepare", self._on_drag_prepare, item)
+            row.add_controller(drag_source)
+
             self.list_box.append(row)
 
         if items:
@@ -152,6 +205,15 @@ class FileListWidget(Gtk.ScrolledWindow):
                 self.list_box.select_row(first_row)
 
         self._update_status_bar()
+
+    def _on_drag_prepare(self, source, x, y, item):
+        target_paths = self.get_target_files()
+        if item.path not in target_paths:
+            target_paths = [item.path]
+
+        gfiles = [Gio.File.new_for_path(p) for p in target_paths]
+        file_list = Gdk.FileList.new_from_list(gfiles)
+        return Gdk.ContentProvider.new_for_value(file_list)
 
     def toggle_selection_focused(self):
         item = self.get_focused_item()
@@ -163,11 +225,9 @@ class FileListWidget(Gtk.ScrolledWindow):
         else:
             self.selected_paths.add(item.path)
 
-        # Re-render current list items to reflect checkbox state
         self._populate_list(self.displayed_items)
 
     def get_target_files(self):
-        """Returns active multi-selection if non-empty, otherwise current hovered/focused item path in a list."""
         if self.selected_paths:
             return list(self.selected_paths)
         focused = self.get_focused_item()
