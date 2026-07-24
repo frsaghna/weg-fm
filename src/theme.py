@@ -1,6 +1,7 @@
 """
 Theme Engine & Config Manager for weg.
 Supports theme switching via ':theme <name>' command and persistence in ~/.config/weg/config.json.
+Ultra-compact terminal TUI styling for all entry fields, status bars, and command lines.
 """
 
 import os
@@ -76,7 +77,7 @@ THEMES = {
         "badge_fg": "#15161e",
         "badge_filter": "#9ece6a",
         "badge_search": "#e0af68",
-        "badge_cmd": "#f7768e",
+        "badge_cmd": "#bb9af7",
     },
     "gruvbox": {
         "name": "Gruvbox Dark",
@@ -144,16 +145,18 @@ THEMES = {
 }
 
 _css_provider = None
-_current_theme = "catppuccin"
+_current_theme = "tokyonight"
 
 def generate_theme_css(palette):
     return f"""
+/* Terminal Global Font Reset */
 * {{
     font-family: 'JetBrains Mono', 'Fira Code', 'Hack', 'Cascadia Code', 'Liberation Mono', 'monospace';
-    font-size: 13px;
+    font-size: 12px;
     border-radius: 0px;
     box-shadow: none;
     text-shadow: none;
+    margin: 0px;
 }}
 
 window {{
@@ -161,29 +164,37 @@ window {{
     color: {palette['fg']};
 }}
 
+/* Ultra-Compact Path Bar / Bufferline */
 .path-bar {{
     background-color: {palette['header_bg']};
-    padding: 6px 12px;
+    padding: 2px 8px;
+    min-height: 22px;
     border-bottom: 1px solid {palette['border_color']};
 }}
 
 .path-label {{
     color: {palette['dir_color']};
     font-weight: bold;
+    font-size: 12px;
 }}
 
+/* Ultra-Compact Entry Fields (Terminal Commandline & Path Editing) */
 entry {{
-    background-color: {palette['entry_bg']};
+    background-color: {palette['header_bg']};
     color: {palette['entry_fg']};
-    border: 1px solid {palette['entry_border']};
-    padding: 4px 8px;
+    border: none;
+    padding: 1px 4px;
+    min-height: 20px;
+    font-size: 12px;
 }}
 
 entry:focus {{
-    border-color: {palette['dir_color']};
     background-color: {palette['bg']};
+    color: {palette['entry_fg']};
+    border: none;
 }}
 
+/* List View & Row Spacing (Neovim cursorline style) */
 scrolledwindow {{
     background-color: {palette['bg']};
     border: none;
@@ -195,10 +206,11 @@ list {{
 }}
 
 row {{
-    padding: 4px 10px;
+    padding: 2px 8px;
+    min-height: 20px;
     background-color: transparent;
     color: {palette['fg']};
-    border-left: 3px solid transparent;
+    border-left: 2px solid transparent;
 }}
 
 row:hover {{
@@ -208,7 +220,7 @@ row:hover {{
 row:selected {{
     background-color: {palette['selection_bg']};
     color: #ffffff;
-    border-left: 3px solid {palette['selection_accent']};
+    border-left: 2px solid {palette['selection_accent']};
     font-weight: bold;
 }}
 
@@ -219,6 +231,10 @@ row:selected {{
 
 .file-item {{
     color: {palette['file_color']};
+}}
+
+.hidden-item {{
+    color: #565f89;
 }}
 
 .exec-item {{
@@ -237,10 +253,11 @@ separator {{
     min-width: 1px;
 }}
 
+/* Preview Pane */
 .preview-pane {{
     background-color: {palette['header_bg']};
     border-left: 1px solid {palette['border_color']};
-    padding: 8px;
+    padding: 6px;
 }}
 
 textview text {{
@@ -248,20 +265,24 @@ textview text {{
     color: {palette['fg']};
 }}
 
+/* Ultra-Compact Status & Command Bars (Neovim Lualine style) */
 .status-bar {{
     background-color: {palette['header_bg']};
     color: {palette['fg']};
-    padding: 4px 12px;
+    padding: 2px 8px;
+    min-height: 20px;
     border-top: 1px solid {palette['border_color']};
-    font-size: 12px;
+    font-size: 11px;
 }}
 
 .mode-badge {{
     background-color: {palette['badge_bg']};
     color: {palette['badge_fg']};
     font-weight: bold;
-    padding: 2px 8px;
-    margin-right: 8px;
+    padding: 1px 6px;
+    min-height: 18px;
+    margin-right: 4px;
+    font-size: 11px;
 }}
 
 .mode-badge-filter {{
@@ -282,15 +303,15 @@ textview text {{
 .help-card {{
     background-color: {palette['card_bg']};
     border: 1px solid {palette['border_color']};
-    padding: 12px;
-    margin-bottom: 12px;
+    padding: 10px;
+    margin-bottom: 8px;
 }}
 
 .help-title {{
     color: {palette['badge_search']};
     font-weight: bold;
-    font-size: 13px;
-    margin-bottom: 8px;
+    font-size: 12px;
+    margin-bottom: 6px;
 }}
 
 .key-cap {{
@@ -298,12 +319,14 @@ textview text {{
     color: {palette['exec_color']};
     border: 1px solid {palette['entry_border']};
     font-weight: bold;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 2px;
+    font-size: 11px;
 }}
 
 .key-desc {{
     color: {palette['fg']};
+    font-size: 12px;
 }}
 """
 
@@ -362,5 +385,5 @@ def save_config(config_data):
 
 def init_theme():
     config = load_config()
-    saved_theme = config.get("theme", "catppuccin")
+    saved_theme = config.get("theme", "tokyonight")
     set_theme(saved_theme)

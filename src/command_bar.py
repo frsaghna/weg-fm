@@ -14,11 +14,11 @@ KNOWN_COMMAND_VERBS = ("theme", "icons", "iconset", "mkdir", "touch", "new", "re
 
 class CommandBarWidget(Gtk.Box):
     def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel, on_filter_activate=None):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self.set_margin_top(4)
-        self.set_margin_bottom(8)
-        self.set_margin_start(12)
-        self.set_margin_end(12)
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.set_margin_top(0)
+        self.set_margin_bottom(0)
+        self.set_margin_start(0)
+        self.set_margin_end(0)
 
         self.on_filter_change = on_filter_change
         self.on_search_query = on_search_query

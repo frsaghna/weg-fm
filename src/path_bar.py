@@ -10,8 +10,12 @@ from gi.repository import Gtk, Gdk
 
 class PathBarWidget(Gtk.Box):
     def __init__(self, on_navigate):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self.add_css_class("path-bar")
+        self.set_margin_top(0)
+        self.set_margin_bottom(0)
+        self.set_margin_start(0)
+        self.set_margin_end(0)
 
         self.on_navigate = on_navigate
         self.current_path = ""

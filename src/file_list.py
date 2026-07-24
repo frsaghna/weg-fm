@@ -285,11 +285,11 @@ class FileListWidget(Gtk.ScrolledWindow):
             self.list_box.remove(row)
 
         for item in items:
-            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            row_box.set_margin_top(3)
-            row_box.set_margin_bottom(3)
-            row_box.set_margin_start(8)
-            row_box.set_margin_end(8)
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            row_box.set_margin_top(1)
+            row_box.set_margin_bottom(1)
+            row_box.set_margin_start(4)
+            row_box.set_margin_end(4)
 
             is_selected = item.path in self.selected_paths
             sel_text = "[x] " if is_selected else "[ ] "
