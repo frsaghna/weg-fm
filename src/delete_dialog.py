@@ -1,7 +1,7 @@
 """
 Minimal TUI Delete Confirmation Dialog for weg.
 Default focus is set to 'Cancel' to prevent accidental deletion.
-Supports 'y' / 'n', arrow keys, Enter, and Esc.
+Supports 'y' / 'n', arrow keys (left/right/h/l), Enter, and Esc.
 """
 
 import os
@@ -15,7 +15,7 @@ class DeleteConfirmWindow(Gtk.Window):
         super().__init__(title="Delete Confirmation")
         self.set_transient_for(parent_win)
         self.set_modal(True)
-        self.set_default_size(440, 210)
+        self.set_default_size(440, 190)
         self.targets = targets
         self.on_confirm = on_confirm
 
@@ -49,15 +49,17 @@ class DeleteConfirmWindow(Gtk.Window):
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
         # Button Bar (Default focus on Cancel to prevent accidental deletion)
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_halign(Gtk.Align.END)
 
         self.cancel_btn = Gtk.Button(label="Cancel [N]")
+        self.cancel_btn.set_can_focus(True)
         self.cancel_btn.connect("clicked", lambda b: self.close())
         btn_box.append(self.cancel_btn)
 
         self.delete_btn = Gtk.Button(label="Delete [Y]")
-        self.delete_btn.add_css_class("mode-badge-cmd")
+        self.delete_btn.set_can_focus(True)
+        self.delete_btn.add_css_class("destructive-btn")
         self.delete_btn.connect("clicked", self._do_delete)
         btn_box.append(self.delete_btn)
 
@@ -88,6 +90,19 @@ class DeleteConfirmWindow(Gtk.Window):
             return True
         elif keyval in (Gdk.KEY_Right, Gdk.KEY_l):
             self.delete_btn.grab_focus()
+            return True
+        elif keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
+            if self.get_focus() == self.cancel_btn:
+                self.delete_btn.grab_focus()
+            else:
+                self.cancel_btn.grab_focus()
+            return True
+        elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            focused = self.get_focus()
+            if focused == self.delete_btn:
+                self._do_delete()
+            else:
+                self.close()
             return True
         return False
 

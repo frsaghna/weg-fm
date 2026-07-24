@@ -2,7 +2,7 @@
 Theme Engine & Config Manager for weg.
 Supports built-in themes (tokyonight, catppuccin, nord, gruvbox, dracula, matrix)
 AND Omarchy Global System Theming (~/.config/omarchy/current/theme/colors.toml).
-High-contrast styling for popup dialog hints, keycaps, and theme selectors.
+Flat compact TUI button styling matching terminal aesthetic.
 """
 
 import os
@@ -255,6 +255,39 @@ entry:focus {{
     background-color: {palette['bg']};
     color: {palette['entry_fg']};
     border: none;
+}}
+
+/* Ultra-Compact TUI Buttons */
+button {{
+    background-color: {palette['header_bg']};
+    color: {palette['fg']};
+    border: 1px solid {palette['border_color']};
+    border-radius: 0px;
+    padding: 2px 10px;
+    min-height: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    box-shadow: none;
+}}
+
+button:focus, button:hover {{
+    background-color: {palette['selection_bg']};
+    color: {sel_fg};
+    border-color: {palette['selection_accent']};
+    outline: none;
+    box-shadow: none;
+}}
+
+button.destructive-btn {{
+    background-color: {palette['header_bg']};
+    color: {palette['badge_cmd']};
+    border: 1px solid {palette['badge_cmd']};
+}}
+
+button.destructive-btn:focus, button.destructive-btn:hover {{
+    background-color: {palette['badge_cmd']};
+    color: #15161e;
+    border-color: {palette['badge_cmd']};
 }}
 
 scrolledwindow {{

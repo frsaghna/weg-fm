@@ -58,18 +58,36 @@ class TestDeleteConfirmationDialog(unittest.TestCase):
         self.assertTrue(handled_esc)
         self.assertEqual(len(deleted), 0)
 
-    def test_delete_dialog_arrow_focus(self):
+    def test_delete_dialog_arrow_focus_and_enter(self):
         app = Gtk.Application(application_id="fm.weg.TestDeleteDialog")
         win = WegWindow(app, initial_dir=self.tmp_dir)
 
-        dlg = DeleteConfirmWindow(win, [self.target_file], lambda t: None)
-        # Test arrow right/l moves focus to delete_btn
+        deleted = []
+        def _on_confirm(targets):
+            deleted.extend(targets)
+
+        dlg = DeleteConfirmWindow(win, [self.target_file], _on_confirm)
+
+        # Test arrow right / l moves focus to delete_btn
         dlg._on_key_pressed(None, Gdk.KEY_Right, 0, 0)
         self.assertEqual(dlg.get_focus(), dlg.delete_btn)
 
-        # Test arrow left/h moves focus back to cancel_btn
-        dlg._on_key_pressed(None, Gdk.KEY_Left, 0, 0)
-        self.assertEqual(dlg.get_focus(), dlg.cancel_btn)
+        # Test Enter on delete_btn confirms delete
+        dlg._on_key_pressed(None, Gdk.KEY_Return, 0, 0)
+        self.assertIn(self.target_file, deleted)
+
+    def test_delete_dialog_enter_on_default_cancel(self):
+        app = Gtk.Application(application_id="fm.weg.TestDeleteDialog")
+        win = WegWindow(app, initial_dir=self.tmp_dir)
+
+        deleted = []
+        def _on_confirm(targets):
+            deleted.extend(targets)
+
+        dlg = DeleteConfirmWindow(win, [self.target_file], _on_confirm)
+        # Default focus is cancel_btn, pressing Enter cancels
+        dlg._on_key_pressed(None, Gdk.KEY_Return, 0, 0)
+        self.assertEqual(len(deleted), 0)
 
 if __name__ == "__main__":
     unittest.main()
