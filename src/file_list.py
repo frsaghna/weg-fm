@@ -1,5 +1,6 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
+  - Rich Unix file metadata status line (permissions, owner:group, formatted size, mtime)
   - Auto-open single matching folder on filter activation (Enter)
   - Customizable iconsets ('nerdfont', 'minimal', 'unicode')
   - Minimalist monochrome Nerd Font glyphs (default)
@@ -9,6 +10,10 @@ File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
 """
 
 import os
+import stat
+import pwd
+import grp
+import time
 import shutil
 import subprocess
 import gi
@@ -57,6 +62,33 @@ ICON_SETS = {
         "file": "📄",
     }
 }
+
+def format_size(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+def get_file_details(path, is_dir):
+    try:
+        st = os.stat(path)
+        mode_str = stat.filemode(st.st_mode)
+        try:
+            owner = pwd.getpwuid(st.st_uid).pw_name
+            group = grp.getgrgid(st.st_gid).gr_name
+            owner_str = f"{owner}:{group}"
+        except Exception:
+            owner_str = f"{st.st_uid}:{st.st_gid}"
+
+        size_str = "DIR" if is_dir else format_size(st.st_size)
+        mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime))
+        return f"{mode_str}  │  {owner_str}  │  {size_str}  │  {mtime_str}"
+    except Exception:
+        return "DIR" if is_dir else f"{os.path.getsize(path)} B"
 
 class FileItem:
     def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False, iconset="nerdfont"):
@@ -422,12 +454,14 @@ class FileListWidget(Gtk.ScrolledWindow):
             return
 
         num_sel = len(self.selected_paths)
+        total = len(self.displayed_items)
+
         if num_sel > 0:
-            self.on_status_change(f"{num_sel} item(s) selected ({len(self.displayed_items)} shown)")
+            self.on_status_change(f"{num_sel} item(s) selected  │  {total} items total")
         else:
             focused = self.get_focused_item()
             if focused:
-                size_str = f" ({focused.size} bytes)" if not focused.is_dir else ""
-                self.on_status_change(f"{focused.name}{size_str} — {len(self.displayed_items)} item(s)")
+                details = get_file_details(focused.path, focused.is_dir)
+                self.on_status_change(f"{details}  │  {total} items")
             else:
-                self.on_status_change(f"{len(self.displayed_items)} item(s)")
+                self.on_status_change(f"{total} items")
