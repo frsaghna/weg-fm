@@ -1,7 +1,7 @@
 """
 Main application window for weg.
-Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L),
-and handles file operations & clipboard integration.
+Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L, Tab preview),
+and handles file operations, clipboard, and preview pane.
 """
 
 import os
@@ -15,13 +15,14 @@ from gi.repository import Gtk, Gdk, Gio, GLib
 
 from src.path_bar import PathBarWidget
 from src.file_list import FileListWidget
+from src.preview_pane import PreviewPaneWidget
 from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
         super().__init__(application=app, title="weg")
-        self.set_default_size(700, 500)
+        self.set_default_size(850, 550)
 
         if not initial_dir or not os.path.exists(initial_dir):
             initial_dir = os.path.expanduser("~")
@@ -39,12 +40,22 @@ class WegWindow(Gtk.ApplicationWindow):
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # 2. File List
+        # 2. Middle Content Area (File List + Tab-toggled Preview Pane)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        content_box.set_vexpand(True)
+
         self.file_list = FileListWidget(
             on_open_directory=self.navigate_to,
-            on_status_change=self.update_status
+            on_status_change=self._on_file_list_status_change
         )
-        main_box.append(self.file_list)
+        content_box.append(self.file_list)
+
+        self.preview_pane = PreviewPaneWidget()
+        self.preview_pane.set_visible(False)
+        content_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        content_box.append(self.preview_pane)
+
+        main_box.append(content_box)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
         # 3. Status Bar
@@ -86,6 +97,23 @@ class WegWindow(Gtk.ApplicationWindow):
 
     def update_status(self, text):
         self.status_bar.set_text(text)
+
+    def _on_file_list_status_change(self, text):
+        self.update_status(text)
+        if self.preview_pane.get_visible():
+            item = self.file_list.get_focused_item()
+            if item:
+                self.preview_pane.preview_file(item.path)
+            else:
+                self.preview_pane.clear()
+
+    def toggle_preview(self):
+        is_visible = not self.preview_pane.get_visible()
+        self.preview_pane.set_visible(is_visible)
+        if is_visible:
+            item = self.file_list.get_focused_item()
+            if item:
+                self.preview_pane.preview_file(item.path)
 
     def _on_directory_changed(self):
         if self.current_dir and not self.command_bar.mode:
@@ -244,6 +272,11 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+
+        # Tab key: Toggle preview pane
+        if keyval == Gdk.KEY_Tab:
+            self.toggle_preview()
+            return True
 
         # Ctrl+C: Copy to clipboard
         if ctrl_pressed and (keyval in (Gdk.KEY_c, Gdk.KEY_C)):
