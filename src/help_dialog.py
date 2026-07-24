@@ -1,5 +1,5 @@
 """
-Structured TUI Help Overlay Dialog for weg.
+Structured TUI Help Overlay Dialog.
 Renders keybindings organized in clean TUI section cards with styled keycap badges.
 """
 
@@ -71,7 +71,7 @@ SECTIONS = [
 
 class HelpOverlayWindow(Gtk.Window):
     def __init__(self, parent_win):
-        super().__init__(title="weg — Keybindings & Command Reference")
+        super().__init__(title="Keybindings & Command Reference")
         self.set_transient_for(parent_win)
         self.set_modal(True)
         self.set_default_size(720, 560)
@@ -84,12 +84,9 @@ class HelpOverlayWindow(Gtk.Window):
 
         # Header Banner
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        brand = Gtk.Label(label="[ weg ]")
-        brand.add_css_class("mode-badge")
         title = Gtk.Label(label="KEYBINDINGS & COMMAND REFERENCE", xalign=0.0)
         title.add_css_class("path-label")
 
-        header_box.append(brand)
         header_box.append(title)
         main_box.append(header_box)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))

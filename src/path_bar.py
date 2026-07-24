@@ -17,11 +17,6 @@ class PathBarWidget(Gtk.Box):
         self.current_path = ""
         self.editing = False
 
-        # Brand Badge
-        self.brand_label = Gtk.Label(label="[ weg ]")
-        self.brand_label.add_css_class("mode-badge")
-        self.append(self.brand_label)
-
         # Path Display Label
         self.path_label = Gtk.Label(label="", xalign=0.0)
         self.path_label.add_css_class("path-label")

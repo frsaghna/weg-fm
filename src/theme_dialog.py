@@ -1,5 +1,5 @@
 """
-Interactive Theme Picker Dialog for weg (triggered by ':theme' without args).
+Interactive Theme Picker Dialog.
 Allows choosing themes using j/k, arrow keys, or Enter.
 """
 
@@ -12,7 +12,7 @@ from src.theme import THEMES, set_theme, get_current_theme
 
 class ThemePickerWindow(Gtk.Window):
     def __init__(self, parent_win):
-        super().__init__(title="weg — Theme Selector")
+        super().__init__(title="Theme Selector")
         self.set_transient_for(parent_win)
         self.set_modal(True)
         self.set_default_size(480, 360)
@@ -26,12 +26,9 @@ class ThemePickerWindow(Gtk.Window):
 
         # Header
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        brand = Gtk.Label(label="[ weg ]")
-        brand.add_css_class("mode-badge")
         title = Gtk.Label(label="SELECT THEME", xalign=0.0)
         title.add_css_class("path-label")
 
-        header_box.append(brand)
         header_box.append(title)
         main_box.append(header_box)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))

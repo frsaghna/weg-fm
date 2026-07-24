@@ -24,7 +24,7 @@ from src.theme import init_theme, set_theme, get_current_theme, get_available_th
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
-        super().__init__(application=app, title="weg")
+        super().__init__(application=app, title="")
         self.set_default_size(850, 550)
 
         # Apply & init saved theme from ~/.config/weg/config.json
