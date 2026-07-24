@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weg-fm"
+version = "0.1.0"
+description = "A minimal, keyboard-first GTK4/GIO file explorer for Linux"
+readme = "README.md"
+authors = [{ name = "weg contributors" }]
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "PyGObject>=3.42.0"
+]
+
+[project.scripts]
+weg = "src.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
