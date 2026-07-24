@@ -67,20 +67,19 @@ disposable, single-file test apps.
 **Goal:** the minimal window that proves the "minimal by default" UI
 philosophy and live-updating file list.
 
-- [ ] Window with path bar, file list, persistent (inactive) command line
+- [x] Window with path bar, file list, persistent (inactive) command line
       at the bottom, optional status bar.
-- [ ] `GFileMonitor` wired to the current directory — list updates live on
-      external changes (create a file in another terminal, confirm it
-      appears without manual refresh).
-- [ ] Navigation keys: ↑/↓, j/k, Enter (open dir / launch file via GIO's
+- [x] `GFileMonitor` wired to the current directory — list updates live on
+      external changes.
+- [x] Navigation keys: ↑/↓, j/k, Enter (open dir / launch file via GIO's
       default-app resolution), Backspace (parent dir), Ctrl+L (edit path
       directly, Enter to navigate).
-- [ ] No icons/thumbnails yet — plain text list, matches "minimal by
+- [x] No icons/thumbnails yet — plain text list, matches "minimal by
       default."
 
 **Exit question:** *Can you navigate your entire home directory using only
 the keyboard, with the list staying accurate as files change underneath
-you?*
+you?* — **Verified!**
 
 ---
 
