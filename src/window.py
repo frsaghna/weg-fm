@@ -1,6 +1,6 @@
 """
 Main application window for weg with clean TUI aesthetics, nnn-style keyboard navigation,
-and interactive '?' help overlay.
+theme switcher (:theme), and interactive '?' help overlay.
 """
 
 import os
@@ -19,15 +19,15 @@ from src.preview_pane import PreviewPaneWidget
 from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
 from src.help_dialog import show_help_overlay
-from src.style import apply_tui_theme
+from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
         super().__init__(application=app, title="weg")
         self.set_default_size(850, 550)
 
-        # Apply TUI theme CSS
-        apply_tui_theme()
+        # Apply & init saved theme from ~/.config/weg/config.json
+        init_theme()
 
         if not initial_dir or not os.path.exists(initial_dir):
             initial_dir = os.path.expanduser("~")
@@ -284,6 +284,16 @@ class WegWindow(Gtk.ApplicationWindow):
             self.show_help()
             return
 
+        if verb == "theme":
+            if not arg:
+                curr = get_current_theme()
+                avail = ", ".join(get_available_themes())
+                self.update_status(f"Current theme: '{curr}'. Available: {avail}")
+            else:
+                ok, msg = set_theme(arg)
+                self.update_status(msg)
+            return
+
         if verb in ("mkdir", "newfolder"):
             if arg:
                 target = os.path.join(self.current_dir, arg)
@@ -357,7 +367,6 @@ class WegWindow(Gtk.ApplicationWindow):
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
 
-        # ? / F1: Toggle help overlay
         if keyval in (Gdk.KEY_question, Gdk.KEY_F1):
             self.show_help()
             return True
