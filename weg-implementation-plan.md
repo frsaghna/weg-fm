@@ -87,20 +87,19 @@ you?* — **Verified!**
 
 **Goal:** implement the `/`, `>`, `:` prefix system from spec §3.2.
 
-- [ ] `/query` — instant, non-recursive, current-dir filter, updates per
+- [x] `/query` — instant, non-recursive, current-dir filter, updates per
       keystroke, Esc/Backspace behavior.
-- [ ] `>query` — recursive search via the traversal strategy decided in
+- [x] `>query` — recursive search via the traversal strategy decided in
       Phase 1c, relative paths shown in results.
-- [ ] `:command` — start with the simplest commands first: `:new folder`,
-      `:new file`, `r` for inline rename (no dialog).
-- [ ] Explicitly resolve (don't defer again) the multi-select semantics
-      question from spec §3.3: what does `:rename` do with 5 files
-      selected? Decide and document before implementing `:delete`/
-      `:compress` for multi-select, since they inherit the same ambiguity.
+- [x] `:command` — `:new folder`, `:new file`, `r` / `:rename` (inline rename
+      & batch pattern rename), `:delete`.
+- [x] Explicitly resolved multi-select semantics (Space toggles selection set;
+      commands target active multi-selection when non-empty, focused item otherwise;
+      batch rename supports `{n}` numbering).
 
 **Exit question:** *Can you filter, recursively search, create, and rename
 files without touching the mouse — and does multi-select behavior match a
-rule you wrote down, not one you improvised while coding?*
+rule you wrote down, not one you improvised while coding?* — **Verified!**
 
 ---
 
