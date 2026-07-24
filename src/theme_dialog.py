@@ -1,21 +1,22 @@
 """
 Interactive Theme Picker Dialog.
-Allows choosing themes using j/k, arrow keys, or Enter.
+Allows choosing themes (including Omarchy Global System) using j/k, arrow keys, or Enter.
 """
 
+import os
 import gi
 
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gdk
 
-from src.theme import THEMES, set_theme, get_current_theme
+from src.theme import THEMES, set_theme, get_current_theme, get_available_themes, load_omarchy_palette
 
 class ThemePickerWindow(Gtk.Window):
     def __init__(self, parent_win):
         super().__init__(title="Theme Selector")
         self.set_transient_for(parent_win)
         self.set_modal(True)
-        self.set_default_size(480, 360)
+        self.set_default_size(480, 380)
         self.parent_win = parent_win
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -41,7 +42,14 @@ class ThemePickerWindow(Gtk.Window):
         current = get_current_theme()
         selected_row = None
 
-        for key, palette in THEMES.items():
+        all_theme_keys = get_available_themes()
+
+        for key in all_theme_keys:
+            if key == "omarchy":
+                palette = load_omarchy_palette() or {"name": "Omarchy Global System"}
+            else:
+                palette = THEMES[key]
+
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             row_box.set_margin_top(6)
             row_box.set_margin_bottom(6)

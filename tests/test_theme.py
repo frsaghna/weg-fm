@@ -21,12 +21,18 @@ from src.theme import get_available_themes, set_theme, get_current_theme
 class TestThemeEngine(unittest.TestCase):
     def test_available_themes(self):
         themes = get_available_themes()
+        self.assertIn("tokyonight", themes)
         self.assertIn("catppuccin", themes)
         self.assertIn("nord", themes)
-        self.assertIn("tokyonight", themes)
         self.assertIn("gruvbox", themes)
         self.assertIn("dracula", themes)
         self.assertIn("matrix", themes)
+        self.assertIn("omarchy", themes)
+
+    def test_omarchy_theme_switching(self):
+        ok, msg = set_theme("omarchy")
+        self.assertTrue(ok)
+        self.assertEqual(get_current_theme(), "omarchy")
 
     def test_set_theme_switching(self):
         ok, msg = set_theme("nord")

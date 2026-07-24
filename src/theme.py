@@ -1,21 +1,46 @@
 """
 Theme Engine & Config Manager for weg.
-Supports theme switching via ':theme <name>' command and persistence in ~/.config/weg/config.json.
-Ultra-compact terminal TUI styling for all entry fields, status bars, and command lines.
+Supports built-in themes (tokyonight, catppuccin, nord, gruvbox, dracula, matrix)
+AND Omarchy Global System Theming (~/.config/omarchy/current/theme/colors.toml).
+Supports real-time hot-reloading when Omarchy theme changes system-wide.
 """
 
 import os
 import json
+import tomllib
 import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
-from gi.repository import Gtk, Gdk
+gi.require_version('Gio', '2.0')
+from gi.repository import Gtk, Gdk, Gio, GLib
 
 CONFIG_DIR = os.path.expanduser("~/.config/weg")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
+OMARCHY_COLORS_PATH = os.path.expanduser("~/.config/omarchy/current/theme/colors.toml")
 
 THEMES = {
+    "tokyonight": {
+        "name": "Tokyo Night",
+        "bg": "#1a1b26",
+        "fg": "#a9b1d6",
+        "header_bg": "#16161e",
+        "dir_color": "#7aa2f7",
+        "file_color": "#c0caf5",
+        "exec_color": "#9ece6a",
+        "selection_bg": "#283457",
+        "selection_accent": "#7dcfff",
+        "border_color": "#292e42",
+        "entry_bg": "#24283b",
+        "entry_fg": "#73daca",
+        "entry_border": "#414868",
+        "card_bg": "#24283b",
+        "badge_bg": "#7aa2f7",
+        "badge_fg": "#15161e",
+        "badge_filter": "#9ece6a",
+        "badge_search": "#e0af68",
+        "badge_cmd": "#bb9af7",
+    },
     "catppuccin": {
         "name": "Catppuccin Mocha",
         "bg": "#181825",
@@ -57,27 +82,6 @@ THEMES = {
         "badge_filter": "#a3be8c",
         "badge_search": "#ebcb8b",
         "badge_cmd": "#bf616a",
-    },
-    "tokyonight": {
-        "name": "Tokyo Night",
-        "bg": "#1a1b26",
-        "fg": "#a9b1d6",
-        "header_bg": "#16161e",
-        "dir_color": "#7aa2f7",
-        "file_color": "#c0caf5",
-        "exec_color": "#9ece6a",
-        "selection_bg": "#283457",
-        "selection_accent": "#7dcfff",
-        "border_color": "#292e42",
-        "entry_bg": "#24283b",
-        "entry_fg": "#73daca",
-        "entry_border": "#414868",
-        "card_bg": "#24283b",
-        "badge_bg": "#7aa2f7",
-        "badge_fg": "#15161e",
-        "badge_filter": "#9ece6a",
-        "badge_search": "#e0af68",
-        "badge_cmd": "#bb9af7",
     },
     "gruvbox": {
         "name": "Gruvbox Dark",
@@ -146,10 +150,54 @@ THEMES = {
 
 _css_provider = None
 _current_theme = "tokyonight"
+_omarchy_monitor = None
+
+def load_omarchy_palette():
+    if not os.path.exists(OMARCHY_COLORS_PATH):
+        return None
+
+    try:
+        with open(OMARCHY_COLORS_PATH, "rb") as f:
+            data = tomllib.load(f)
+
+        bg = data.get("background", "#16161e")
+        fg = data.get("foreground", "#c0caf5")
+        accent = data.get("accent", "#7aa2f7")
+        sel_bg = data.get("selection_background", "#283457")
+        c0 = data.get("color0", "#121212")
+        c1 = data.get("color1", "#8a8a8a")
+        c2 = data.get("color2", "#e7e9ea")
+        c3 = data.get("color3", "#9e9e9e")
+        c4 = data.get("color4", "#626262")
+        c8 = data.get("color8", "#626262")
+
+        return {
+            "name": "Omarchy Global System",
+            "bg": bg,
+            "fg": fg,
+            "header_bg": c0,
+            "dir_color": c4 if c4 != bg else accent,
+            "file_color": fg,
+            "exec_color": c2,
+            "selection_bg": sel_bg if sel_bg != bg else "#283457",
+            "selection_accent": accent,
+            "border_color": c8,
+            "entry_bg": c0,
+            "entry_fg": fg,
+            "entry_border": c8,
+            "card_bg": c0,
+            "badge_bg": accent,
+            "badge_fg": "#000000",
+            "badge_filter": c2,
+            "badge_search": c3,
+            "badge_cmd": c1,
+        }
+    except Exception as e:
+        print(f"[Theme] Error loading Omarchy colors.toml: {e}")
+        return None
 
 def generate_theme_css(palette):
     return f"""
-/* Terminal Global Font Reset */
 * {{
     font-family: 'JetBrains Mono', 'Fira Code', 'Hack', 'Cascadia Code', 'Liberation Mono', 'monospace';
     font-size: 12px;
@@ -164,7 +212,6 @@ window {{
     color: {palette['fg']};
 }}
 
-/* Ultra-Compact Path Bar / Bufferline */
 .path-bar {{
     background-color: {palette['header_bg']};
     padding: 2px 8px;
@@ -178,7 +225,6 @@ window {{
     font-size: 12px;
 }}
 
-/* Ultra-Compact Entry Fields (Terminal Commandline & Path Editing) */
 entry {{
     background-color: {palette['header_bg']};
     color: {palette['entry_fg']};
@@ -194,7 +240,6 @@ entry:focus {{
     border: none;
 }}
 
-/* List View & Row Spacing (Neovim cursorline style) */
 scrolledwindow {{
     background-color: {palette['bg']};
     border: none;
@@ -253,7 +298,6 @@ separator {{
     min-width: 1px;
 }}
 
-/* Preview Pane */
 .preview-pane {{
     background-color: {palette['header_bg']};
     border-left: 1px solid {palette['border_color']};
@@ -265,7 +309,6 @@ textview text {{
     color: {palette['fg']};
 }}
 
-/* Ultra-Compact Status & Command Bars (Neovim Lualine style) */
 .status-bar {{
     background-color: {palette['header_bg']};
     color: {palette['fg']};
@@ -331,19 +374,30 @@ textview text {{
 """
 
 def get_available_themes():
-    return list(THEMES.keys())
+    avail = list(THEMES.keys())
+    if os.path.exists(OMARCHY_COLORS_PATH):
+        avail.append("omarchy")
+    return avail
 
 def get_current_theme():
     return _current_theme
 
 def set_theme(theme_name):
-    global _css_provider, _current_theme
+    global _css_provider, _current_theme, _omarchy_monitor
     theme_key = theme_name.lower().strip()
-    if theme_key not in THEMES:
+    
+    palette = None
+    if theme_key == "omarchy":
+        palette = load_omarchy_palette()
+        if not palette:
+            return False, "Omarchy theme file not found (~/.config/omarchy/current/theme/colors.toml)"
+        _setup_omarchy_hot_reload()
+    elif theme_key in THEMES:
+        palette = THEMES[theme_key]
+    else:
         return False, f"Unknown theme '{theme_name}'. Available: {', '.join(get_available_themes())}"
 
     _current_theme = theme_key
-    palette = THEMES[theme_key]
     css_data = generate_theme_css(palette)
 
     display = Gdk.Display.get_default()
@@ -363,6 +417,23 @@ def set_theme(theme_name):
 
     save_config({"theme": _current_theme})
     return True, f"Theme set to '{palette['name']}'"
+
+def _setup_omarchy_hot_reload():
+    global _omarchy_monitor
+    if _omarchy_monitor is not None:
+        return
+
+    if os.path.exists(OMARCHY_COLORS_PATH):
+        try:
+            gfile = Gio.File.new_for_path(OMARCHY_COLORS_PATH)
+            _omarchy_monitor = gfile.monitor_file(Gio.FileMonitorFlags.NONE, None)
+            _omarchy_monitor.connect("changed", _on_omarchy_theme_changed)
+        except Exception as e:
+            print(f"[Theme] Error monitoring Omarchy theme: {e}")
+
+def _on_omarchy_theme_changed(monitor, file, other_file, event_type):
+    if _current_theme == "omarchy" and event_type in (Gio.FileMonitorEvent.CHANGED, Gio.FileMonitorEvent.CHANGES_DONE_HINT):
+        set_theme("omarchy")
 
 def load_config():
     if os.path.exists(CONFIG_PATH):
@@ -385,5 +456,5 @@ def save_config(config_data):
 
 def init_theme():
     config = load_config()
-    saved_theme = config.get("theme", "tokyonight")
+    saved_theme = config.get("theme", "omarchy" if os.path.exists(OMARCHY_COLORS_PATH) else "tokyonight")
     set_theme(saved_theme)
