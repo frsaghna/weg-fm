@@ -1,6 +1,6 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
-  - Filetype glyphs (NerdFont / Unicode icons)
+  - Universal Unicode filetype symbols (no Nerd Font dependency required)
   - Neovim cursorline highlighting
   - Half-page jumping (Ctrl+D / Ctrl+U)
   - Hidden files toggle (.)
@@ -34,19 +34,19 @@ class FileItem:
         
         ext = os.path.splitext(self.name)[1].lower()
         if ext in ('.py', '.pyw'):
-            return "" # Python
-        elif ext in ('.md', '.markdown', '.txt'):
-            return "󰍔" # Document
-        elif ext in ('.json', '.yaml', '.yml', '.toml', '.edn'):
-            return "󰅩" # Config / Data
-        elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'):
-            return "󰋩" # Image
-        elif ext in ('.zip', '.tar', '.gz', '.bz2', '.7z', '.xz'):
-            return "" # Archive
-        elif ext in ('.sh', '.bash', '.zsh'):
-            return "" # Shell script
-        elif ext in ('.rs', '.c', '.cpp', '.h', '.go', '.js', '.ts'):
-            return "" # Code source
+            return "🐍" # Python
+        elif ext in ('.md', '.markdown', '.txt', '.doc', '.docx', '.pdf'):
+            return "📝" # Document
+        elif ext in ('.json', '.yaml', '.yml', '.toml', '.edn', '.ini', '.conf'):
+            return "⚙️" # Config / Data
+        elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp'):
+            return "🖼️" # Image
+        elif ext in ('.zip', '.tar', '.gz', '.bz2', '.7z', '.xz', '.rar'):
+            return "📦" # Archive
+        elif ext in ('.sh', '.bash', '.zsh', '.fish'):
+            return "📜" # Script
+        elif ext in ('.rs', '.c', '.cpp', '.h', '.go', '.js', '.ts', '.html', '.css'):
+            return "💻" # Code source
         return "📄" # Generic File
 
 class FileListWidget(Gtk.ScrolledWindow):
@@ -313,17 +313,17 @@ class FileListWidget(Gtk.ScrolledWindow):
             self.list_box.select_row(target_row)
             target_row.grab_focus()
 
-    def jump_half_page(self, direction): # +1 for Ctrl+D, -1 for Ctrl+U
+    def jump_half_page(self, direction):
         self.move_selection(direction * 10)
 
-    def jump_to_first(self): # gg
+    def jump_to_first(self):
         if self.displayed_items:
             target_row = self.list_box.get_row_at_index(0)
             if target_row:
                 self.list_box.select_row(target_row)
                 target_row.grab_focus()
 
-    def jump_to_last(self): # G
+    def jump_to_last(self):
         if self.displayed_items:
             target_row = self.list_box.get_row_at_index(len(self.displayed_items) - 1)
             if target_row:
