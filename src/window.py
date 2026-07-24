@@ -1,14 +1,6 @@
 """
-Main application window for weg with Neovim / LazyVim motion ergonomics:
-  j / k       : Next / previous item
-  h / l       : Parent directory / enter directory or open file
-  gg          : Jump to top of file list
-  G           : Jump to bottom of file list
-  Ctrl+D      : Scroll half-page down
-  Ctrl+U      : Scroll half-page up
-  . / Ctrl+H  : Toggle hidden dotfiles
-  ~           : Navigate to Home directory
-  q           : Quit application
+Main application window for weg with Neovim / LazyVim ergonomics,
+nnn-style 8-context/tab switching (keys 1-8), and Omarchy global system theme support.
 """
 
 import os
@@ -31,6 +23,7 @@ from src.help_dialog import show_help_overlay
 from src.theme_dialog import show_theme_picker
 from src.delete_dialog import show_delete_confirmation
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
+from src.context_manager import ContextManager
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
@@ -44,6 +37,9 @@ class WegWindow(Gtk.ApplicationWindow):
             initial_dir = os.path.expanduser("~")
         self.current_dir = os.path.abspath(initial_dir)
 
+        # Multi-Context Manager (nnn-style 1-8 tabs)
+        self.context_mgr = ContextManager(initial_dir=self.current_dir, total_contexts=8)
+
         self.display = Gdk.Display.get_default()
         self.clipboard = self.display.get_clipboard() if self.display else None
 
@@ -52,8 +48,11 @@ class WegWindow(Gtk.ApplicationWindow):
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # 1. Path Bar (Neovim bufferline style)
-        self.path_bar = PathBarWidget(on_navigate=self.navigate_to)
+        # 1. Path Bar (Neovim bufferline style + Top-Right 1-8 Context Indicator)
+        self.path_bar = PathBarWidget(
+            on_navigate=self.navigate_to,
+            on_context_click=self.switch_context
+        )
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
@@ -98,6 +97,27 @@ class WegWindow(Gtk.ApplicationWindow):
         self.add_controller(key_ctrl)
 
         self.navigate_to(self.current_dir)
+
+    def switch_context(self, target_context_id):
+        if not (1 <= target_context_id <= 8):
+            return
+
+        # Save active context state
+        curr = self.context_mgr.get_active()
+        curr.current_dir = self.current_dir
+        curr.selected_paths = set(self.file_list.selected_paths)
+        curr.show_hidden = self.file_list.show_hidden
+
+        # Switch to target context
+        nxt = self.context_mgr.set_active_context(target_context_id)
+        if not nxt:
+            return
+
+        self.path_bar.update_contexts(active_id=target_context_id)
+        self.file_list.show_hidden = nxt.show_hidden
+        self.file_list.selected_paths = set(nxt.selected_paths)
+        self.navigate_to(nxt.current_dir)
+        self.update_status(f"Switched to Context {target_context_id} ({os.path.basename(nxt.current_dir) or nxt.current_dir})")
 
     def navigate_to(self, path):
         path = os.path.abspath(path)
@@ -302,6 +322,13 @@ class WegWindow(Gtk.ApplicationWindow):
                 self.update_status(msg)
             return
 
+        if verb in ("context", "tab"):
+            if arg.isdigit() and 1 <= int(arg) <= 8:
+                self.switch_context(int(arg))
+            else:
+                self.update_status(f"Current context: {self.context_mgr.active_id}. Usage: :context <1-8>")
+            return
+
         if verb in ("q", "quit"):
             app = self.get_application()
             if app:
@@ -380,6 +407,12 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+
+        # nnn-style Context / Tab switching using keys 1-8
+        if keyval in (Gdk.KEY_1, Gdk.KEY_2, Gdk.KEY_3, Gdk.KEY_4, Gdk.KEY_5, Gdk.KEY_6, Gdk.KEY_7, Gdk.KEY_8) and not ctrl_pressed:
+            target_c_id = keyval - Gdk.KEY_0
+            self.switch_context(target_c_id)
+            return True
 
         if ctrl_pressed and keyval == Gdk.KEY_d:
             self.file_list.jump_half_page(1)

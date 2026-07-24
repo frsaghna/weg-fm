@@ -1,5 +1,6 @@
 """
-Path bar widget supporting breadcrumb display and direct Ctrl+L editing with TUI styling.
+Path bar widget supporting breadcrumb display, direct Ctrl+L editing,
+and top-right nnn-style context/tab indicator (1-8).
 """
 
 import os
@@ -9,7 +10,7 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gdk
 
 class PathBarWidget(Gtk.Box):
-    def __init__(self, on_navigate):
+    def __init__(self, on_navigate, on_context_click=None):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self.add_css_class("path-bar")
         self.set_margin_top(0)
@@ -18,10 +19,11 @@ class PathBarWidget(Gtk.Box):
         self.set_margin_end(0)
 
         self.on_navigate = on_navigate
+        self.on_context_click = on_context_click
         self.current_path = ""
         self.editing = False
 
-        # Path Display Label
+        # Left: Path Display Label
         self.path_label = Gtk.Label(label="", xalign=0.0)
         self.path_label.add_css_class("path-label")
         self.path_label.set_hexpand(True)
@@ -37,6 +39,43 @@ class PathBarWidget(Gtk.Box):
         key_ctrl.connect("key-pressed", self._on_entry_key_pressed)
         self.path_entry.add_controller(key_ctrl)
         self.append(self.path_entry)
+
+        # Right: nnn-Style Context / Tab Indicator Box
+        self.context_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
+        self.context_box.set_halign(Gtk.Align.END)
+        self.context_buttons = {}
+
+        for c_id in range(1, 9):
+            lbl = Gtk.Label(label=str(c_id))
+            lbl.add_css_class("key-cap")
+            
+            click_gesture = Gtk.GestureClick()
+            click_gesture.connect("pressed", self._create_context_click_handler(c_id))
+            lbl.add_controller(click_gesture)
+
+            self.context_box.append(lbl)
+            self.context_buttons[c_id] = lbl
+
+        self.append(self.context_box)
+        self.update_contexts(active_id=1)
+
+    def _create_context_click_handler(self, c_id):
+        def _handler(gesture, n_press, x, y):
+            if self.on_context_click:
+                self.on_context_click(c_id)
+        return _handler
+
+    def update_contexts(self, active_id=1):
+        for c_id, lbl in self.context_buttons.items():
+            for cls in ("mode-badge", "selected-checkbox", "key-cap", "path-badge"):
+                lbl.remove_css_class(cls)
+
+            if c_id == active_id:
+                lbl.set_label(f"[{c_id}]")
+                lbl.add_css_class("mode-badge")
+            else:
+                lbl.set_label(f" {c_id} ")
+                lbl.add_css_class("key-cap")
 
     def set_path(self, path):
         self.current_path = os.path.abspath(path)

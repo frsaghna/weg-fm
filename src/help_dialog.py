@@ -11,6 +11,7 @@ SECTIONS = [
     (
         "NAVIGATION & VIM MOTIONS",
         [
+            ("1  -  8", "Switch nnn-style context / tab (1-8, top-right indicator)"),
             ("h  /  ←  /  Backspace", "Navigate to parent directory (..)"),
             ("l  /  →  /  Enter", "Open file or enter directory"),
             ("j  /  ↓", "Move selection down"),
