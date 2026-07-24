@@ -308,7 +308,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         search_items.sort(key=lambda item: (not item.is_dir, item.display_path.lower()))
         self._populate_list(search_items)
 
-    def _populate_list(self, items):
+    def _populate_list(self, items, preserve_idx=None):
         self.displayed_items = items
         while True:
             row = self.list_box.get_row_at_index(0)
@@ -357,9 +357,11 @@ class FileListWidget(Gtk.ScrolledWindow):
             self.list_box.append(row)
 
         if items:
-            first_row = self.list_box.get_row_at_index(0)
-            if first_row:
-                self.list_box.select_row(first_row)
+            target_idx = preserve_idx if (preserve_idx is not None and 0 <= preserve_idx < len(items)) else 0
+            target_row = self.list_box.get_row_at_index(target_idx)
+            if target_row:
+                self.list_box.select_row(target_row)
+                target_row.grab_focus()
 
         self._update_status_bar()
 
@@ -373,6 +375,9 @@ class FileListWidget(Gtk.ScrolledWindow):
         return Gdk.ContentProvider.new_for_value(file_list)
 
     def toggle_selection_focused(self):
+        row = self.list_box.get_selected_row()
+        focused_idx = row.get_index() if row else 0
+
         item = self.get_focused_item()
         if not item:
             return
@@ -382,7 +387,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         else:
             self.selected_paths.add(item.path)
 
-        self._populate_list(self.displayed_items)
+        self._populate_list(self.displayed_items, preserve_idx=focused_idx)
 
     def get_target_files(self):
         if self.selected_paths:
