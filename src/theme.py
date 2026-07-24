@@ -2,7 +2,7 @@
 Theme Engine & Config Manager for weg.
 Supports built-in themes (tokyonight, catppuccin, nord, gruvbox, dracula, matrix)
 AND Omarchy Global System Theming (~/.config/omarchy/current/theme/colors.toml).
-Fixed selection text contrast and stripped GTK system blue focus/scroll animations.
+Eliminated mouse hover ghosting and secondary row focus highlights.
 """
 
 import os
@@ -301,16 +301,18 @@ row {{
     border-left: 2px solid transparent;
 }}
 
+/* Prevent mouse hover from leaving ghost secondary highlights */
 row:hover {{
-    background-color: {palette['entry_bg']};
+    background-color: transparent;
 }}
 
-row:focus {{
+row:focus, row:focus-visible, row:active {{
     outline: none;
     box-shadow: none;
+    background-color: transparent;
 }}
 
-row:selected {{
+row:selected, row:selected:hover, row:selected:focus, row:selected:not(:focus), row:selected:backdrop {{
     background-color: {palette['selection_bg']};
     color: {sel_fg};
     border-left: 2px solid {palette['selection_accent']};
