@@ -471,13 +471,15 @@ class FileListWidget(Gtk.ScrolledWindow):
 
         num_sel = len(self.selected_paths)
         total = len(self.displayed_items)
+        row = self.list_box.get_selected_row()
+        focused_idx = (row.get_index() + 1) if (row and row.get_index() >= 0) else (1 if total > 0 else 0)
 
         if num_sel > 0:
-            self.on_status_change(f"{num_sel} item(s) selected  │  {total} items total")
+            self.on_status_change(f"{num_sel} item(s) selected  │  {focused_idx}/{total} items")
         else:
             focused = self.get_focused_item()
             if focused:
                 details = get_file_details(focused.path, focused.is_dir)
-                self.on_status_change(f"{details}  │  {total} items")
+                self.on_status_change(f"{details}  │  {focused_idx}/{total} items")
             else:
-                self.on_status_change(f"{total} items")
+                self.on_status_change(f"{focused_idx}/{total} items")
