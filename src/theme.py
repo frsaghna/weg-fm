@@ -2,7 +2,7 @@
 Theme Engine & Config Manager for weg.
 Supports built-in themes (tokyonight, catppuccin, nord, gruvbox, dracula, matrix)
 AND Omarchy Global System Theming (~/.config/omarchy/current/theme/colors.toml).
-Fixed selection text contrast and stripped GTK system blue focus/scroll animations.
+High-contrast styling for popup dialog hints, keycaps, and theme selectors.
 """
 
 import os
@@ -310,7 +310,7 @@ row:focus {{
     box-shadow: none;
 }}
 
-row:selected {{
+row:selected, row:selected:hover, row:selected:focus, row:selected:not(:focus), row:selected:backdrop {{
     background-color: {palette['selection_bg']};
     color: {sel_fg};
     border-left: 2px solid {palette['selection_accent']};
@@ -323,6 +323,12 @@ row:selected .file-item,
 row:selected .exec-item,
 row:selected .hidden-item {{
     color: {sel_fg};
+}}
+
+row:selected .key-cap {{
+    background-color: {palette['selection_accent']};
+    color: {palette['badge_fg']};
+    border: none;
 }}
 
 .dir-item {{
@@ -407,18 +413,18 @@ textview text {{
 }}
 
 .help-title {{
-    color: {palette['badge_search']};
+    color: {palette['selection_accent']};
     font-weight: bold;
     font-size: 12px;
     margin-bottom: 6px;
 }}
 
 .key-cap {{
-    background-color: {palette['selection_bg']};
-    color: {palette['exec_color']};
-    border: 1px solid {palette['entry_border']};
+    background-color: {palette['header_bg']};
+    color: {palette['selection_accent']};
+    border: 1px solid {palette['border_color']};
     font-weight: bold;
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 2px;
     font-size: 11px;
 }}
