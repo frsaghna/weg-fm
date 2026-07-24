@@ -52,9 +52,9 @@ class CommandBarWidget(Gtk.Box):
     def activate_mode(self, prefix, initial_text=""):
         self.mode = prefix
         self.prefix_label.set_text(prefix)
+        self.entry.grab_focus()
         self.entry.set_text(initial_text)
         self.entry.set_position(-1)
-        self.entry.grab_focus()
         self._update_badge()
 
     def deactivate(self, keep_filter=False):

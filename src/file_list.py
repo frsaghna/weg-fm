@@ -357,11 +357,19 @@ class FileListWidget(Gtk.ScrolledWindow):
             self.list_box.append(row)
 
         if items:
+            root = self.get_root()
+            curr_focus = root.get_focus() if root else None
+
             target_idx = preserve_idx if (preserve_idx is not None and 0 <= preserve_idx < len(items)) else 0
             target_row = self.list_box.get_row_at_index(target_idx)
             if target_row:
                 self.list_box.select_row(target_row)
-                target_row.grab_focus()
+                if root and hasattr(root, 'command_bar') and root.command_bar.mode:
+                    root.command_bar.entry.grab_focus()
+                elif curr_focus and isinstance(curr_focus, (Gtk.Entry, Gtk.Text)):
+                    curr_focus.grab_focus()
+                else:
+                    target_row.grab_focus()
 
         self._update_status_bar()
 
