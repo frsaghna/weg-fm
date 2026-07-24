@@ -1,11 +1,22 @@
 """
-Main application window for weg.
-Connects CommandBar (/ > :), keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+L, Tab preview, x, Shift+X),
-and handles file operations, GIO trash, permanent deletion safety, clipboard, and preview pane.
+Main application window for weg with exact nnn-style keyboard navigation:
+  h / Left   : Parent directory
+  l / Right  : Enter directory / open file
+  j / Down   : Next item
+  k / Up     : Previous item
+  g / Home   : First item in list
+  G / End    : Last item in list
+  . / Ctrl+H : Toggle hidden files
+  ~          : Home directory
+  q          : Quit application
+  /          : Filter mode
+  >          : Recursive search mode
+  :          : Command mode
 """
 
 import os
 import shutil
+import subprocess
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -40,7 +51,7 @@ class WegWindow(Gtk.ApplicationWindow):
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # 2. Content Area
+        # 2. Content Area (File List + Preview Pane)
         content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         content_box.set_vexpand(True)
 
@@ -124,7 +135,6 @@ class WegWindow(Gtk.ApplicationWindow):
         self.file_list.grab_focus()
 
     def move_selection_to_trash(self):
-        """'x': Move selection to Trash via GIO trash API."""
         targets = self.file_list.get_target_files()
         if not targets:
             return
@@ -142,7 +152,6 @@ class WegWindow(Gtk.ApplicationWindow):
         self.update_status(f"Moved {trashed_count} item(s) to Trash")
 
     def permanent_delete_selection(self, confirm_bypass=False):
-        """'Shift+X': Permanently delete selection with data safety confirmation."""
         targets = self.file_list.get_target_files()
         if not targets:
             return
@@ -276,23 +285,37 @@ class WegWindow(Gtk.ApplicationWindow):
         verb = parts[0].lower()
         arg = parts[1].strip() if len(parts) > 1 else ""
 
-        if verb in ("new", "touch", "mkdir"):
+        if verb in ("mkdir", "newfolder"):
+            if arg:
+                target = os.path.join(self.current_dir, arg)
+                os.makedirs(target, exist_ok=True)
+                self.update_status(f"Created folder '{arg}'")
+        elif verb in ("touch", "newfile"):
+            if arg:
+                target = os.path.join(self.current_dir, arg)
+                open(target, "a").close()
+                self.update_status(f"Created file '{arg}'")
+        elif verb in ("new",):
             if arg.startswith("folder "):
                 folder_name = arg[7:].strip()
                 if folder_name:
                     target = os.path.join(self.current_dir, folder_name)
                     os.makedirs(target, exist_ok=True)
+                    self.update_status(f"Created folder '{folder_name}'")
             elif arg.startswith("file "):
                 file_name = arg[5:].strip()
                 if file_name:
                     target = os.path.join(self.current_dir, file_name)
                     open(target, "a").close()
+                    self.update_status(f"Created file '{file_name}'")
             else:
                 target = os.path.join(self.current_dir, arg)
                 if "." in arg:
                     open(target, "a").close()
+                    self.update_status(f"Created file '{arg}'")
                 else:
                     os.makedirs(target, exist_ok=True)
+                    self.update_status(f"Created folder '{arg}'")
 
         elif verb in ("rename", "mv"):
             targets = self.file_list.get_target_files()
@@ -303,6 +326,7 @@ class WegWindow(Gtk.ApplicationWindow):
                 old_path = targets[0]
                 new_path = os.path.join(os.path.dirname(old_path), arg)
                 os.rename(old_path, new_path)
+                self.update_status(f"Renamed to '{arg}'")
             else:
                 for idx, old_path in enumerate(targets, 1):
                     ext = os.path.splitext(old_path)[1]
@@ -312,9 +336,19 @@ class WegWindow(Gtk.ApplicationWindow):
                         new_name = f"{arg}_{idx}{ext}"
                     new_path = os.path.join(os.path.dirname(old_path), new_name)
                     os.rename(old_path, new_path)
+                self.update_status(f"Batch renamed {len(targets)} item(s)")
 
         elif verb in ("delete", "rm"):
             self.permanent_delete_selection()
+
+        else:
+            # Fallback: Execute shell command in current directory
+            try:
+                res = subprocess.run(cmd_text, shell=True, cwd=self.current_dir, capture_output=True, text=True)
+                msg = res.stdout.strip() or res.stderr.strip() or f"Command exit code: {res.returncode}"
+                self.update_status(msg[:80])
+            except Exception as e:
+                self.update_status(f"Execution error: {e}")
 
         self.file_list.load_directory(self.current_dir)
 
@@ -324,6 +358,33 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+
+        # nnn navigation: q -> quit app
+        if keyval == Gdk.KEY_q and not ctrl_pressed:
+            app = self.get_application()
+            if app:
+                app.quit()
+            return True
+
+        # nnn navigation: ~ -> Home directory
+        if keyval in (Gdk.KEY_asciitilde, Gdk.KEY_tilde):
+            self.navigate_to(os.path.expanduser("~"))
+            return True
+
+        # nnn navigation: . / Ctrl+H -> Toggle hidden files
+        if (keyval == Gdk.KEY_period and not ctrl_pressed) or (ctrl_pressed and keyval in (Gdk.KEY_h, Gdk.KEY_H)):
+            self.file_list.toggle_hidden_files()
+            return True
+
+        # nnn navigation: g -> Jump to top (first item)
+        if keyval == Gdk.KEY_g and not ctrl_pressed:
+            self.file_list.jump_to_first()
+            return True
+
+        # nnn navigation: G -> Jump to bottom (last item)
+        if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_G:
+            self.file_list.jump_to_last()
+            return True
 
         # Tab key: Toggle preview pane
         if keyval == Gdk.KEY_Tab:
@@ -377,27 +438,27 @@ class WegWindow(Gtk.ApplicationWindow):
             return True
 
         # r: Quick inline rename
-        elif keyval == Gdk.KEY_r:
-            self.command_bar.activate_mode(':')
-            self.command_bar.entry.set_text("rename ")
-            self.command_bar.entry.set_position(-1)
+        elif keyval == Gdk.KEY_r and not ctrl_pressed:
+            self.command_bar.activate_mode(':', initial_text="rename ")
             return True
 
-        # Navigation: ↑/k, ↓/j
+        # nnn Navigation: Up (k / UpArrow)
         elif keyval in (Gdk.KEY_Up, Gdk.KEY_k):
             self.file_list.move_selection(-1)
             return True
+
+        # nnn Navigation: Down (j / DownArrow)
         elif keyval in (Gdk.KEY_Down, Gdk.KEY_j):
             self.file_list.move_selection(1)
             return True
 
-        # Enter: Activate selected
-        elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+        # nnn Navigation: Open / Enter dir (l / RightArrow / Enter)
+        elif keyval in (Gdk.KEY_Right, Gdk.KEY_l, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             self.file_list.activate_selected()
             return True
 
-        # Backspace: Parent directory
-        elif keyval == Gdk.KEY_BackSpace:
+        # nnn Navigation: Parent dir (h / LeftArrow / BackSpace)
+        elif keyval in (Gdk.KEY_Left, Gdk.KEY_h, Gdk.KEY_BackSpace):
             parent = os.path.dirname(self.current_dir)
             if parent and parent != self.current_dir:
                 self.navigate_to(parent)

@@ -1,16 +1,16 @@
 # weg (`weg-fm`)
 
-*Minimal, keyboard-first GTK4 file explorer for Linux with native desktop interop.*
+*Minimal, keyboard-first GTK4 file explorer for Linux with native desktop interop and `nnn` ergonomics.*
 
 ---
 
 ## 🌟 Key Features
 
-- **Keyboard-First Navigation**: Move through directories instantly using `j`/`k` or `↑`/`↓`, open files with `Enter`, parent dir with `Backspace`, and direct path editing via `Ctrl+L`.
+- **`nnn`-Exact Keyboard Ergonomics**: Move through directories instantly using `h`/`l`/`j`/`k` or arrow keys, jump top/bottom with `g`/`G`, toggle dotfiles with `.`, navigate to `$HOME` with `~`, and quit with `q`.
 - **Command-Line Grammar**:
-  - `/query` — Instant local current-directory live filter.
-  - `>query` — Instant recursive search powered by `fd` (tiered search <15ms response).
-  - `:command` — Integrated command mode (`:new folder`, `:new file`, `:rename`, `:delete`).
+  - `/query` — Instant current-directory live filter.
+  - `>query` — Instant recursive search powered by `fd` (<15ms response).
+  - `:command` — Integrated command mode (`:mkdir`, `:touch`, `:rename`, `:delete`, or raw shell execution). Automatically handles prefix parsing and execution.
 - **Native Clipboard Interop**: Real file objects on GTK/Wayland clipboard (`x-special/gnome-copied-files` and `Gdk.FileList`). Cut (`Ctrl+X`), Copy (`Ctrl+C`), and Paste (`Ctrl+V`) directly to and from Nautilus, Dolphin, or other GTK/Qt applications.
 - **Native Drag and Drop**: Drag files out from `weg` into Nautilus or drag files in from Nautilus (`GtkDragSource` & `GtkDropTarget` supporting `COPY | MOVE` negotiation).
 - **Live Directory Updates**: Powered by GIO `GFileMonitor` (inotify-backed) — directory listings update automatically when files change externally.
@@ -19,34 +19,39 @@
 
 ---
 
-## ⌨️ Keybindings
+## ⌨️ `nnn` Keybindings Reference
 
 | Key | Action |
 |---|---|
-| `↑` / `k` | Move selection up |
-| `↓` / `j` | Move selection down |
-| `Enter` | Open file or directory |
-| `Backspace` | Navigate to parent directory |
+| `h` / `Left` / `Backspace` | Navigate to parent directory (`..`) |
+| `l` / `Right` / `Enter` | Enter selected directory or open file |
+| `k` / `Up` | Move selection up |
+| `j` / `Down` | Move selection down |
+| `g` / `Home` | Jump to first item in list |
+| `G` / `End` | Jump to last item in list |
+| `.` / `Ctrl+H` | Toggle hidden dotfiles |
+| `~` | Go to `$HOME` directory |
+| `q` | Quit `weg` |
 | `Space` | Toggle multi-selection on focused item |
-| `Ctrl+L` | Focus path bar for direct path editing |
 | `/` | Instant current-directory filter mode |
 | `>` | Recursive search mode via `fd` |
-| `:` | Command mode (`:new folder`, `:new file`, `:rename`, `:delete`) |
+| `:` | Command mode (`:mkdir`, `:touch`, `:rename`, `:delete`, or shell command) |
 | `r` | Quick inline rename mode |
 | `Ctrl+C` | Copy selected file(s) to clipboard |
 | `Ctrl+X` | Cut selected file(s) to clipboard |
 | `Ctrl+V` | Paste file(s) from clipboard |
+| `Ctrl+L` | Focus path bar for direct path editing |
 | `Tab` | Toggle side-by-side file preview pane |
 | `x` | Move selected file(s) to Trash (GIO Trash API) |
 | `Shift+X` | Permanently delete selected file(s) (with safety confirmation) |
-| `Esc` | Cancel filter/search/command mode or path editing |
+| `Esc` | Clear filter / search / command bar and return to navigation |
 
 ---
 
 ## 🚀 Installation & Usage
 
 ### Dependencies
-Ensure the system GTK4 and PyGObject packages are installed:
+Ensure system GTK4 and PyGObject dependencies are installed:
 - Arch Linux: `pacman -S gtk4 python-gobject fd ffmpegthumbnailer evince`
 
 ### Launch Locally
@@ -56,14 +61,14 @@ Ensure the system GTK4 and PyGObject packages are installed:
 
 ### Install Package
 ```bash
-pip install .
+python3 setup.py build
 ```
 
 ---
 
 ## 🧪 Testing
 
-Run the full automated test suite:
+Run the automated test suite (13 tests):
 ```bash
 python3 -m unittest discover tests
 ```

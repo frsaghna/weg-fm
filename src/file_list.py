@@ -1,6 +1,6 @@
 """
 File list widget using GTK4 Gtk.ListBox with multi-select, live filtering (/),
-recursive search (>), AND native Drag & Drop (Phase 4).
+recursive search (>), hidden files toggle, and nnn-style navigation.
 """
 
 import os
@@ -30,6 +30,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.on_open_directory = on_open_directory
         self.on_status_change = on_status_change
         self.current_dir = ""
+        self.show_hidden = False
         self.all_items = []
         self.displayed_items = []
         self.selected_paths = set()
@@ -49,6 +50,12 @@ class FileListWidget(Gtk.ScrolledWindow):
         drop_target.connect("enter", self._on_drop_enter)
         drop_target.connect("drop", self._on_drop)
         self.add_controller(drop_target)
+
+    def toggle_hidden_files(self):
+        self.show_hidden = not self.show_hidden
+        self._apply_current_filter()
+        if self.on_status_change:
+            self.on_status_change(f"Hidden files {'shown' if self.show_hidden else 'hidden'}")
 
     def _on_drop_enter(self, target, x, y):
         return Gdk.DragAction.COPY | Gdk.DragAction.MOVE
@@ -122,16 +129,25 @@ class FileListWidget(Gtk.ScrolledWindow):
         new_items.sort(key=lambda item: (not item.is_dir, item.name.lower()))
         
         self.all_items = new_items
-        self._populate_list(self.all_items)
+        self._apply_current_filter()
         return True
+
+    def _apply_current_filter(self):
+        filtered = self.all_items
+        if not self.show_hidden:
+            filtered = [item for item in filtered if not item.name.startswith('.')]
+        self._populate_list(filtered)
 
     def filter_local(self, query):
         if not query:
-            self._populate_list(self.all_items)
+            self._apply_current_filter()
             return
 
         query_lower = query.lower()
-        filtered = [item for item in self.all_items if query_lower in item.name.lower()]
+        filtered = self.all_items
+        if not self.show_hidden:
+            filtered = [item for item in filtered if not item.name.startswith('.')]
+        filtered = [item for item in filtered if query_lower in item.name.lower()]
         self._populate_list(filtered)
 
     def search_recursive(self, query):
@@ -139,7 +155,9 @@ class FileListWidget(Gtk.ScrolledWindow):
             return
 
         self.is_search_mode = True
-        cmd = ["fd", "--hidden", "--exclude", ".git", "--max-depth", "5", query, self.current_dir]
+        cmd = ["fd", "--exclude", ".git", "--max-depth", "5", query, self.current_dir]
+        if self.show_hidden:
+            cmd.insert(1, "--hidden")
         try:
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
             lines = [l for l in res.stdout.splitlines() if l.strip()]
@@ -242,6 +260,8 @@ class FileListWidget(Gtk.ScrolledWindow):
         return None
 
     def move_selection(self, delta):
+        if not self.displayed_items:
+            return
         row = self.list_box.get_selected_row()
         idx = row.get_index() if row else 0
         new_idx = max(0, min(len(self.displayed_items) - 1, idx + delta))
@@ -249,6 +269,20 @@ class FileListWidget(Gtk.ScrolledWindow):
         if target_row:
             self.list_box.select_row(target_row)
             target_row.grab_focus()
+
+    def jump_to_first(self):
+        if self.displayed_items:
+            target_row = self.list_box.get_row_at_index(0)
+            if target_row:
+                self.list_box.select_row(target_row)
+                target_row.grab_focus()
+
+    def jump_to_last(self):
+        if self.displayed_items:
+            target_row = self.list_box.get_row_at_index(len(self.displayed_items) - 1)
+            if target_row:
+                self.list_box.select_row(target_row)
+                target_row.grab_focus()
 
     def activate_selected(self):
         item = self.get_focused_item()
