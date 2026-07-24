@@ -29,6 +29,7 @@ from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
 from src.help_dialog import show_help_overlay
 from src.theme_dialog import show_theme_picker
+from src.delete_dialog import show_delete_confirmation
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 
 class WegWindow(Gtk.ApplicationWindow):
@@ -47,7 +48,7 @@ class WegWindow(Gtk.ApplicationWindow):
         self.clipboard = self.display.get_clipboard() if self.display else None
 
         self.monitor = DirectoryMonitor(self._on_directory_changed)
-        self._last_g_time = 0 # For 'gg' motion tracking
+        self._last_g_time = 0
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
@@ -167,23 +168,9 @@ class WegWindow(Gtk.ApplicationWindow):
             return
 
         if not confirm_bypass:
-            dialog = Gtk.AlertDialog()
-            dialog.set_message("Permanently Delete?")
-            dialog.set_detail(f"Are you sure you want to permanently delete {len(targets)} item(s)? This action cannot be undone.")
-            dialog.set_buttons(["Cancel", "Permanently Delete"])
-            dialog.set_cancel_button(0)
-            dialog.set_default_button(1)
-            dialog.choose(self, None, self._on_confirm_delete_chosen, targets)
+            show_delete_confirmation(self, targets, self._do_permanent_delete)
         else:
             self._do_permanent_delete(targets)
-
-    def _on_confirm_delete_chosen(self, dialog, result, targets):
-        try:
-            choice = dialog.choose_finish(result)
-            if choice == 1:
-                self._do_permanent_delete(targets)
-        except Exception as e:
-            print(f"[Window] Dialog error: {e}")
 
     def _do_permanent_delete(self, targets):
         deleted_count = 0
@@ -394,17 +381,14 @@ class WegWindow(Gtk.ApplicationWindow):
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
 
-        # Vim Motion: Ctrl+D (Half page down)
         if ctrl_pressed and keyval == Gdk.KEY_d:
             self.file_list.jump_half_page(1)
             return True
 
-        # Vim Motion: Ctrl+U (Half page up)
         if ctrl_pressed and keyval == Gdk.KEY_u:
             self.file_list.jump_half_page(-1)
             return True
 
-        # Vim Motion: gg (Jump to top)
         if keyval == Gdk.KEY_g and not ctrl_pressed and not (state & Gdk.ModifierType.SHIFT_MASK):
             now = time.time()
             if now - self._last_g_time < 0.5:
@@ -414,12 +398,10 @@ class WegWindow(Gtk.ApplicationWindow):
                 self._last_g_time = now
             return True
 
-        # Vim Motion: G (Jump to bottom)
         if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_G:
             self.file_list.jump_to_last()
             return True
 
-        # ? / F1: Toggle help overlay
         if keyval in (Gdk.KEY_question, Gdk.KEY_F1):
             self.show_help()
             return True
