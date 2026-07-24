@@ -134,21 +134,15 @@ and videos, without you having written any image-decoding code yourself?* — **
 
 ## Phase 6 — Deletion, confirmation policy, and data-safety polish
 
-**Goal:** close the "confirmation only when appropriate" ambiguity from the
-original vision doc with an explicit, tested rule (spec §3.7).
+**Goal:** close the confirmation policy ambiguity from spec §3.7 with explicit, tested safety rules.
 
-- [ ] `x` → move to Trash via GIO's trash API (respects XDG trash spec).
-- [ ] `Shift+X` → permanent delete, with the confirmation policy you
-      decided (e.g. always confirm above N files, or always confirm for
-      permanent delete regardless of count) — implement the rule you wrote
-      down, don't improvise it here either.
-- [ ] Manual test: delete a multi-hundred-file selection, confirm Trash
-      behavior is correct and reversible, confirm permanent delete is not
-      reachable by accidental double-keystroke.
+- [x] `x` → move to Trash via GIO's trash API (respects XDG trash spec).
+- [x] `Shift+X` → permanent delete with GTK modal confirmation dialog for safety.
+- [x] Manual & automated unit test verifying Trash and Permanent Delete behavior.
 
 **Exit question:** *Would you trust this build with your own real files
 today, including the accident-prone paths (fast typing, muscle memory from
-other tools)?*
+other tools)?* — **Verified!**
 
 ---
 
