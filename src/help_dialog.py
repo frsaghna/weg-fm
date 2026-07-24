@@ -1,6 +1,5 @@
 """
-Structured TUI Help Overlay Dialog.
-Renders keybindings organized in clean TUI section cards with styled keycap badges.
+Structured LazyVim / Neovim Which-Key style Help Overlay Dialog.
 """
 
 import gi
@@ -10,14 +9,16 @@ from gi.repository import Gtk, Gdk
 
 SECTIONS = [
     (
-        "NAVIGATION (nnn-style)",
+        "NAVIGATION & VIM MOTIONS",
         [
             ("h  /  ←  /  Backspace", "Navigate to parent directory (..)"),
             ("l  /  →  /  Enter", "Open file or enter directory"),
             ("j  /  ↓", "Move selection down"),
             ("k  /  ↑", "Move selection up"),
-            ("g  /  Home", "Jump to first item in list"),
-            ("G  /  End", "Jump to last item in list"),
+            ("gg", "Jump to top of file list"),
+            ("G  /  End", "Jump to bottom of file list"),
+            ("Ctrl+D", "Scroll half-page down (10 items)"),
+            ("Ctrl+U", "Scroll half-page up (10 items)"),
             (".  /  Ctrl+H", "Toggle hidden dotfiles"),
             ("~", "Navigate to Home directory"),
             ("Ctrl+L", "Edit path bar directly"),
@@ -25,11 +26,11 @@ SECTIONS = [
         ]
     ),
     (
-        "COMMAND BAR PREFIXES",
+        "TELESCOPE & COMMAND BAR",
         [
-            ("/", "Instant local current-directory filter"),
+            ("/", "Instant local current-directory live filter"),
             (">", "Recursive search via fd (<15ms response)"),
-            (":", "Command mode (type commands below)"),
+            (":", "Neovim command mode (:mkdir, :touch, :rename, :theme)"),
             ("r", "Quick inline rename / batch pattern rename"),
             ("Esc", "Cancel filter/search/command mode"),
         ]
@@ -39,20 +40,18 @@ SECTIONS = [
         [
             (":mkdir <name>", "Create a new folder in current directory"),
             (":touch <name>", "Create a new empty file in current directory"),
-            (":new folder <name>", "Create a new folder (alias for :mkdir)"),
-            (":new file <name>", "Create a new file (alias for :touch)"),
             (":rename <new_name>", "Rename selection (supports '{n}' for batch numbering)"),
             (":delete  /  :rm", "Permanently delete active selection"),
-            (":theme", "List active and available TUI themes"),
+            (":theme", "Open interactive TUI Theme Selector menu"),
             (":theme <name>", "Switch theme (catppuccin, nord, tokyonight, gruvbox, dracula, matrix)"),
-            (":help  /  :hint", "Open this keybinding & command cheat sheet"),
+            (":help  /  :hint", "Open this Which-Key cheat sheet"),
             ("<any_shell_cmd>", "Execute shell command in current directory (e.g. :chmod +x script.sh)"),
         ]
     ),
     (
         "SELECTION & FILE OPERATIONS",
         [
-            ("Space", "Toggle selection on focused item"),
+            ("Space", "Toggle selection on focused item (LazyVim leader)"),
             ("Ctrl+C", "Copy selected file(s) to clipboard"),
             ("Ctrl+X", "Cut selected file(s) to clipboard"),
             ("Ctrl+V", "Paste file(s) from clipboard"),
@@ -74,7 +73,7 @@ class HelpOverlayWindow(Gtk.Window):
         super().__init__(title="Keybindings & Command Reference")
         self.set_transient_for(parent_win)
         self.set_modal(True)
-        self.set_default_size(720, 560)
+        self.set_default_size(740, 580)
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         main_box.set_margin_top(16)
@@ -84,7 +83,7 @@ class HelpOverlayWindow(Gtk.Window):
 
         # Header Banner
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        title = Gtk.Label(label="KEYBINDINGS & COMMAND REFERENCE", xalign=0.0)
+        title = Gtk.Label(label="LAZYVIM KEYBINDINGS & COMMAND REFERENCE", xalign=0.0)
         title.add_css_class("path-label")
 
         header_box.append(title)

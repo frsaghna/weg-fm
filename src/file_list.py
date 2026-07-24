@@ -1,6 +1,9 @@
 """
-File list widget using GTK4 Gtk.ListBox with TUI styling, multi-select, live filtering (/),
-recursive search (>), hidden files toggle, and nnn-style navigation.
+File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
+  - Filetype glyphs (NerdFont / Unicode icons)
+  - Neovim cursorline highlighting
+  - Half-page jumping (Ctrl+D / Ctrl+U)
+  - Hidden files toggle (.)
 """
 
 import os
@@ -21,6 +24,30 @@ class FileItem:
         self.size = size
         self.display_path = display_path or name
         self.is_exec = is_exec
+        self.icon = self._resolve_icon()
+
+    def _resolve_icon(self):
+        if self.is_dir:
+            return "📁" # Directory
+        if self.is_exec:
+            return "⚡" # Executable
+        
+        ext = os.path.splitext(self.name)[1].lower()
+        if ext in ('.py', '.pyw'):
+            return "" # Python
+        elif ext in ('.md', '.markdown', '.txt'):
+            return "󰍔" # Document
+        elif ext in ('.json', '.yaml', '.yml', '.toml', '.edn'):
+            return "󰅩" # Config / Data
+        elif ext in ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'):
+            return "󰋩" # Image
+        elif ext in ('.zip', '.tar', '.gz', '.bz2', '.7z', '.xz'):
+            return "" # Archive
+        elif ext in ('.sh', '.bash', '.zsh'):
+            return "" # Shell script
+        elif ext in ('.rs', '.c', '.cpp', '.h', '.go', '.js', '.ts'):
+            return "" # Code source
+        return "📄" # Generic File
 
 class FileListWidget(Gtk.ScrolledWindow):
     def __init__(self, on_open_directory, on_status_change):
@@ -43,7 +70,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.list_box.connect("row-selected", self._on_row_selected)
         self.set_child(self.list_box)
 
-        # Setup Gtk.DropTarget (Drag IN from Nautilus / external apps)
+        # Setup Gtk.DropTarget
         drop_target = Gtk.DropTarget.new(
             type=Gdk.FileList,
             actions=Gdk.DragAction.COPY | Gdk.DragAction.MOVE
@@ -56,7 +83,7 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.show_hidden = not self.show_hidden
         self._apply_current_filter()
         if self.on_status_change:
-            self.on_status_change(f"Hidden files {'shown' if self.show_hidden else 'hidden'}")
+            self.on_status_change(f"Hidden dotfiles {'shown' if self.show_hidden else 'hidden'}")
 
     def _on_drop_enter(self, target, x, y):
         return Gdk.DragAction.COPY | Gdk.DragAction.MOVE
@@ -207,12 +234,13 @@ class FileListWidget(Gtk.ScrolledWindow):
                 sel_label.add_css_class("selected-checkbox")
             row_box.append(sel_label)
 
-            dir_prefix = "📁 " if item.is_dir else ("⚡ " if item.is_exec else "   ")
             disp = item.display_path if hasattr(item, 'display_path') else item.name
-            label_text = f"{dir_prefix}{disp}{'/' if item.is_dir else ('*' if item.is_exec else '')}"
+            label_text = f"{item.icon}  {disp}{'/' if item.is_dir else ''}"
 
             lbl = Gtk.Label(label=label_text, xalign=0.0)
-            if item.is_dir:
+            if item.name.startswith('.'):
+                lbl.add_css_class("hidden-item")
+            elif item.is_dir:
                 lbl.add_css_class("dir-item")
             elif item.is_exec:
                 lbl.add_css_class("exec-item")
@@ -285,14 +313,17 @@ class FileListWidget(Gtk.ScrolledWindow):
             self.list_box.select_row(target_row)
             target_row.grab_focus()
 
-    def jump_to_first(self):
+    def jump_half_page(self, direction): # +1 for Ctrl+D, -1 for Ctrl+U
+        self.move_selection(direction * 10)
+
+    def jump_to_first(self): # gg
         if self.displayed_items:
             target_row = self.list_box.get_row_at_index(0)
             if target_row:
                 self.list_box.select_row(target_row)
                 target_row.grab_focus()
 
-    def jump_to_last(self):
+    def jump_to_last(self): # G
         if self.displayed_items:
             target_row = self.list_box.get_row_at_index(len(self.displayed_items) - 1)
             if target_row:

@@ -1,11 +1,20 @@
 """
-Main application window for weg with clean TUI aesthetics, nnn-style keyboard navigation,
-theme engine (:theme), interactive theme picker, and interactive '?' help overlay.
+Main application window for weg with Neovim / LazyVim motion ergonomics:
+  j / k       : Next / previous item
+  h / l       : Parent directory / enter directory or open file
+  gg          : Jump to top of file list
+  G           : Jump to bottom of file list
+  Ctrl+D      : Scroll half-page down
+  Ctrl+U      : Scroll half-page up
+  . / Ctrl+H  : Toggle hidden dotfiles
+  ~           : Navigate to Home directory
+  q           : Quit application
 """
 
 import os
 import shutil
 import subprocess
+import time
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -38,10 +47,11 @@ class WegWindow(Gtk.ApplicationWindow):
         self.clipboard = self.display.get_clipboard() if self.display else None
 
         self.monitor = DirectoryMonitor(self._on_directory_changed)
+        self._last_g_time = 0 # For 'gg' motion tracking
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # 1. Path Bar
+        # 1. Path Bar (Neovim bufferline style)
         self.path_bar = PathBarWidget(on_navigate=self.navigate_to)
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
@@ -70,7 +80,7 @@ class WegWindow(Gtk.ApplicationWindow):
         self.status_bar.add_css_class("status-bar")
         main_box.append(self.status_bar)
 
-        # 4. Command Bar
+        # 4. Command Bar (Neovim lualine style)
         self.command_bar = CommandBarWidget(
             on_filter_change=self.file_list.filter_local,
             on_search_query=self.file_list.search_recursive,
@@ -296,6 +306,12 @@ class WegWindow(Gtk.ApplicationWindow):
                 self.update_status(msg)
             return
 
+        if verb in ("q", "quit"):
+            app = self.get_application()
+            if app:
+                app.quit()
+            return
+
         if verb in ("mkdir", "newfolder"):
             if arg:
                 target = os.path.join(self.current_dir, arg)
@@ -369,6 +385,32 @@ class WegWindow(Gtk.ApplicationWindow):
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
 
+        # Vim Motion: Ctrl+D (Half page down)
+        if ctrl_pressed and keyval == Gdk.KEY_d:
+            self.file_list.jump_half_page(1)
+            return True
+
+        # Vim Motion: Ctrl+U (Half page up)
+        if ctrl_pressed and keyval == Gdk.KEY_u:
+            self.file_list.jump_half_page(-1)
+            return True
+
+        # Vim Motion: gg (Jump to top)
+        if keyval == Gdk.KEY_g and not ctrl_pressed and not (state & Gdk.ModifierType.SHIFT_MASK):
+            now = time.time()
+            if now - self._last_g_time < 0.5:
+                self.file_list.jump_to_first()
+                self._last_g_time = 0
+            else:
+                self._last_g_time = now
+            return True
+
+        # Vim Motion: G (Jump to bottom)
+        if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_G:
+            self.file_list.jump_to_last()
+            return True
+
+        # ? / F1: Toggle help overlay
         if keyval in (Gdk.KEY_question, Gdk.KEY_F1):
             self.show_help()
             return True
@@ -385,14 +427,6 @@ class WegWindow(Gtk.ApplicationWindow):
 
         if (keyval == Gdk.KEY_period and not ctrl_pressed) or (ctrl_pressed and keyval in (Gdk.KEY_h, Gdk.KEY_H)):
             self.file_list.toggle_hidden_files()
-            return True
-
-        if keyval == Gdk.KEY_g and not ctrl_pressed:
-            self.file_list.jump_to_first()
-            return True
-
-        if (state & Gdk.ModifierType.SHIFT_MASK) and keyval == Gdk.KEY_G:
-            self.file_list.jump_to_last()
             return True
 
         if keyval == Gdk.KEY_Tab:
