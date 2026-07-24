@@ -13,7 +13,7 @@ from gi.repository import Gtk, Gdk
 KNOWN_COMMAND_VERBS = ("theme", "icons", "iconset", "mkdir", "touch", "new", "rename", "mv", "delete", "rm", "help", "hint", "?")
 
 class CommandBarWidget(Gtk.Box):
-    def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel):
+    def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel, on_filter_activate=None):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.set_margin_top(4)
         self.set_margin_bottom(8)
@@ -24,6 +24,7 @@ class CommandBarWidget(Gtk.Box):
         self.on_search_query = on_search_query
         self.on_command_execute = on_command_execute
         self.on_cancel = on_cancel
+        self.on_filter_activate = on_filter_activate
 
         self.mode = None # None, '/', '>', ':'
 
@@ -143,7 +144,11 @@ class CommandBarWidget(Gtk.Box):
             if text:
                 self.on_command_execute(text)
             self.deactivate(keep_filter=False)
-        elif self.mode in ('/', '>'):
+        elif self.mode == '/':
+            if self.on_filter_activate and self.on_filter_activate():
+                return # Auto-opened single folder!
+            self.deactivate(keep_filter=True)
+        elif self.mode == '>':
             self.deactivate(keep_filter=True)
         else:
             if text:

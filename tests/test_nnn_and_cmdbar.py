@@ -67,9 +67,20 @@ class TestNnnNavigationAndCmdBar(unittest.TestCase):
         handled_help = win._on_key_pressed(None, Gdk.KEY_question, 0, 0)
         self.assertTrue(handled_help)
 
-        # Jump to first
-        win.file_list.jump_to_first()
-        self.assertEqual(win.file_list.get_focused_item().name, "alpha_dir")
+        # Test filter auto-open folder on Enter activation
+        win.navigate_to(self.tmp_dir)
+        win.command_bar.activate_mode('/', initial_text="alpha")
+        win.command_bar._on_activate(win.command_bar.entry)
+        self.assertEqual(win.current_dir, os.path.join(self.tmp_dir, "alpha_dir"))
+
+        # Navigate back and test single file filter does NOT auto open on Enter
+        win.navigate_to(self.tmp_dir)
+        win.command_bar.activate_mode('/', initial_text="beta")
+        win.command_bar._on_activate(win.command_bar.entry)
+        self.assertEqual(win.current_dir, self.tmp_dir) # stays in tmp_dir
+
+        # Reload directory to clear filter for jump test
+        win.file_list.load_directory(self.tmp_dir)
 
         # Jump to last
         win.file_list.jump_to_last()

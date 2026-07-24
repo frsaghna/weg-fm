@@ -1,5 +1,6 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
+  - Auto-open single matching folder on filter activation (Enter)
   - Customizable iconsets ('nerdfont', 'minimal', 'unicode')
   - Minimalist monochrome Nerd Font glyphs (default)
   - Neovim cursorline highlighting
@@ -74,7 +75,6 @@ class FileItem:
 
         ext = os.path.splitext(self.name)[1].lower()
 
-        # Check extension first so script/source icons take priority over generic exec permission
         if ext in ('.sh', '.bash', '.zsh', '.fish'):
             return palette["script"]
         elif ext in ('.py', '.pyw'):
@@ -232,6 +232,15 @@ class FileListWidget(Gtk.ScrolledWindow):
             filtered = [item for item in filtered if not item.name.startswith('.')]
         filtered = [item for item in filtered if query_lower in item.name.lower()]
         self._populate_list(filtered)
+
+    def try_auto_open_single_folder(self):
+        """Called on filter activation (Enter). Enters directory if exactly ONE folder matches."""
+        if len(self.displayed_items) == 1:
+            single_item = self.displayed_items[0]
+            if single_item.is_dir and self.on_open_directory:
+                self.on_open_directory(single_item.path)
+                return True
+        return False
 
     def search_recursive(self, query):
         if not query or not self.current_dir:

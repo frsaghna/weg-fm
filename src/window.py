@@ -85,7 +85,8 @@ class WegWindow(Gtk.ApplicationWindow):
             on_filter_change=self.file_list.filter_local,
             on_search_query=self.file_list.search_recursive,
             on_command_execute=self.execute_command,
-            on_cancel=self._on_command_cancel
+            on_cancel=self._on_command_cancel,
+            on_filter_activate=self.file_list.try_auto_open_single_folder
         )
         main_box.append(self.command_bar)
 
