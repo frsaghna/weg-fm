@@ -150,6 +150,34 @@ textview text {
     background-color: #f38ba8;
     color: #11111b;
 }
+
+/* Help Overlay Card Styling */
+.help-card {
+    background-color: #1e1e2e;
+    border: 1px solid #313244;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.help-title {
+    color: #f9e2af;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.key-cap {
+    background-color: #313244;
+    color: #a6e3a1;
+    border: 1px solid #45475a;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 2px;
+}
+
+.key-desc {
+    color: #cdd6f4;
+}
 """
 
 def apply_tui_theme():
