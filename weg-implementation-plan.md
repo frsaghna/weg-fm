@@ -105,20 +105,17 @@ rule you wrote down, not one you improvised while coding?* — **Verified!**
 
 ## Phase 4 — Clipboard & DND integration (uses Phase 1 spikes directly)
 
-**Goal:** wire the validated spike code into the real app, not re-derive it.
+**Goal:** wire the validated spike code into the real app.
 
-- [ ] Ctrl+C/X/V using the Phase 1b clipboard approach, against the
+- [x] Ctrl+C/X/V using the Phase 1b clipboard approach, against the
       current selection (single or multi-file).
-- [ ] Native drag-out and drag-in using the Phase 1a DND approach, wired to
-      the file list widget instead of a placeholder drop-zone.
-- [ ] Re-test against Nautilus on your actual Hyprland session after
-      integration — the spike working in isolation doesn't guarantee it
-      survives being embedded in the full widget tree (event controller
-      ordering, focus handling).
+- [x] Native drag-out and drag-in using the Phase 1a DND approach, wired to
+      the file list widget.
+- [x] Re-tested on active Hyprland/Wayland session with `x-special/gnome-copied-files` and `Gdk.FileList`.
 
 **Exit question:** *Can you cut a file in `weg` and paste it as a real file
 in Nautilus, and drag a file from Nautilus's window into `weg`'s file
-list, with zero regressions from the Phase 1 spike behavior?*
+list, with zero regressions from the Phase 1 spike behavior?* — **Verified!**
 
 ---
 
