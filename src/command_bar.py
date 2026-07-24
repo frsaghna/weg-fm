@@ -1,5 +1,6 @@
 """
-Command line widget and grammar handler for weg with TUI mode badges.
+Command line widget and grammar handler for weg.
+Handles prefixes (/, >, :) and standalone commands (e.g. 'theme nord', 'mkdir foo', 'touch bar').
 """
 
 import os
@@ -8,6 +9,8 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk
+
+KNOWN_COMMAND_VERBS = ("theme", "mkdir", "touch", "new", "rename", "mv", "delete", "rm", "help", "hint", "?")
 
 class CommandBarWidget(Gtk.Box):
     def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel):
@@ -31,7 +34,7 @@ class CommandBarWidget(Gtk.Box):
         self.prefix_label = Gtk.Label(label=":")
         self.entry = Gtk.Entry()
         self.entry.set_hexpand(True)
-        self.entry.set_placeholder_text("Press /, >, or : for commands (h/j/k/l to navigate)")
+        self.entry.set_placeholder_text("Press /, >, or : for commands (e.g. 'theme nord', '/search')")
 
         self.append(self.prefix_label)
         self.append(self.entry)
@@ -57,13 +60,12 @@ class CommandBarWidget(Gtk.Box):
         self.mode = None
         self.prefix_label.set_text(":")
         self.entry.set_text("")
-        self.entry.set_placeholder_text("Press /, >, or : for commands (h/j/k/l to navigate)")
+        self.entry.set_placeholder_text("Press /, >, or : for commands (e.g. 'theme nord', '/search')")
         self._update_badge()
         if self.on_cancel:
             self.on_cancel(keep_filter=keep_filter)
 
     def _update_badge(self):
-        # Remove existing mode CSS classes
         for cls in ("mode-badge-filter", "mode-badge-search", "mode-badge-cmd"):
             self.badge_label.remove_css_class(cls)
 
@@ -82,6 +84,7 @@ class CommandBarWidget(Gtk.Box):
     def _on_changed(self, entry):
         text = entry.get_text()
 
+        # Auto-detect mode prefix or command verb if user typed directly into entry
         if not self.mode and text:
             if text.startswith('/'):
                 self.mode = '/'
@@ -108,9 +111,17 @@ class CommandBarWidget(Gtk.Box):
                 self._update_badge()
                 return
             else:
-                self.mode = '/'
-                self.prefix_label.set_text('/')
-                self._update_badge()
+                # Check if first word is a known command verb (e.g. 'theme nord')
+                first_word = text.split()[0].lower() if text.split() else ""
+                if first_word in KNOWN_COMMAND_VERBS:
+                    self.mode = ':'
+                    self.prefix_label.set_text(':')
+                    self._update_badge()
+                    return
+                else:
+                    self.mode = '/'
+                    self.prefix_label.set_text('/')
+                    self._update_badge()
 
         if self.mode == '/':
             self.on_filter_change(text)
@@ -122,14 +133,22 @@ class CommandBarWidget(Gtk.Box):
 
     def _on_activate(self, entry):
         text = entry.get_text().strip()
-        current_mode = self.mode or ':'
+        if text.startswith(':'):
+            text = text[1:].strip()
+            self.mode = ':'
 
-        if current_mode == ':':
+        first_word = text.split()[0].lower() if text.split() else ""
+
+        if self.mode == ':' or first_word in KNOWN_COMMAND_VERBS:
             if text:
                 self.on_command_execute(text)
             self.deactivate(keep_filter=False)
-        elif current_mode in ('/', '>'):
+        elif self.mode in ('/', '>'):
             self.deactivate(keep_filter=True)
+        else:
+            if text:
+                self.on_command_execute(text)
+            self.deactivate(keep_filter=False)
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
         if keyval == Gdk.KEY_Escape:

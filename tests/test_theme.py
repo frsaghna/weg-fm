@@ -41,9 +41,15 @@ class TestThemeEngine(unittest.TestCase):
         tmp_dir = tempfile.mkdtemp(prefix="weg_theme_test_")
         win = WegWindow(Gtk.Application(application_id="fm.weg.TestTheme"), initial_dir=tmp_dir)
 
-        # Test :theme nord
+        # Test :theme nord with prefix
         win.execute_command("theme nord")
         self.assertEqual(get_current_theme(), "nord")
+
+        # Test standalone 'theme tokyonight' typed directly into command bar without prefix
+        win.command_bar.deactivate()
+        win.command_bar.entry.set_text("theme tokyonight")
+        win.command_bar._on_activate(win.command_bar.entry)
+        self.assertEqual(get_current_theme(), "tokyonight")
 
         # Test invalid theme name
         win.execute_command("theme invalid_name")
