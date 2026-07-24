@@ -1,7 +1,6 @@
 """
 Minimal TUI Delete Confirmation Dialog for weg.
-Default focus is set to 'Cancel' to prevent accidental deletion.
-Supports 'y' / 'n', arrow keys (left/right/h/l), Enter, and Esc.
+Fits content tightly and uses intuitive button selection states.
 """
 
 import os
@@ -15,15 +14,15 @@ class DeleteConfirmWindow(Gtk.Window):
         super().__init__(title="Delete Confirmation")
         self.set_transient_for(parent_win)
         self.set_modal(True)
-        self.set_default_size(440, 190)
+        self.set_default_size(400, 110)
         self.targets = targets
         self.on_confirm = on_confirm
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        main_box.set_margin_top(14)
-        main_box.set_margin_bottom(14)
-        main_box.set_margin_start(16)
-        main_box.set_margin_end(16)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        main_box.set_margin_top(10)
+        main_box.set_margin_bottom(10)
+        main_box.set_margin_start(12)
+        main_box.set_margin_end(12)
 
         # Title Label
         count_str = f"{len(targets)} item(s)" if len(targets) > 1 else f"'{os.path.basename(targets[0])}'"
@@ -32,16 +31,16 @@ class DeleteConfirmWindow(Gtk.Window):
         main_box.append(title_lbl)
 
         # File preview list
-        preview_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        for p in targets[:4]:
+        preview_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        for p in targets[:3]:
             is_dir = os.path.isdir(p)
             name = os.path.basename(p) or p
             lbl = Gtk.Label(label=f"  {'📁' if is_dir else '📄'} {name}{'/' if is_dir else ''}", xalign=0.0)
             lbl.add_css_class("file-item")
             preview_box.append(lbl)
 
-        if len(targets) > 4:
-            more_lbl = Gtk.Label(label=f"  ... and {len(targets) - 4} more", xalign=0.0)
+        if len(targets) > 3:
+            more_lbl = Gtk.Label(label=f"  ... and {len(targets) - 3} more", xalign=0.0)
             more_lbl.add_css_class("hidden-item")
             preview_box.append(more_lbl)
 
@@ -51,6 +50,7 @@ class DeleteConfirmWindow(Gtk.Window):
         # Button Bar (Default focus on Cancel to prevent accidental deletion)
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_halign(Gtk.Align.END)
+        btn_box.set_margin_top(2)
 
         self.cancel_btn = Gtk.Button(label="Cancel [N]")
         self.cancel_btn.set_can_focus(True)
