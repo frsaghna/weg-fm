@@ -63,6 +63,10 @@ class TestNnnNavigationAndCmdBar(unittest.TestCase):
         self.assertTrue(handled)
         win.navigate_to(self.tmp_dir)
 
+        # Test ? key help trigger
+        handled_help = win._on_key_pressed(None, Gdk.KEY_question, 0, 0)
+        self.assertTrue(handled_help)
+
         # Jump to first
         win.file_list.jump_to_first()
         self.assertEqual(win.file_list.get_focused_item().name, "alpha_dir")

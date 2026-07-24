@@ -1,5 +1,6 @@
 """
-Main application window for weg with clean TUI aesthetics and nnn-style keyboard navigation.
+Main application window for weg with clean TUI aesthetics, nnn-style keyboard navigation,
+and interactive '?' help overlay.
 """
 
 import os
@@ -17,6 +18,7 @@ from src.file_list import FileListWidget
 from src.preview_pane import PreviewPaneWidget
 from src.command_bar import CommandBarWidget
 from src.monitor import DirectoryMonitor
+from src.help_dialog import show_help_overlay
 from src.style import apply_tui_theme
 
 class WegWindow(Gtk.ApplicationWindow):
@@ -63,7 +65,7 @@ class WegWindow(Gtk.ApplicationWindow):
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
         # 3. Status Bar
-        self.status_bar = Gtk.Label(label="Ready", xalign=0.0)
+        self.status_bar = Gtk.Label(label="Press ? for keybinding help", xalign=0.0)
         self.status_bar.add_css_class("status-bar")
         main_box.append(self.status_bar)
 
@@ -114,6 +116,9 @@ class WegWindow(Gtk.ApplicationWindow):
             item = self.file_list.get_focused_item()
             if item:
                 self.preview_pane.preview_file(item.path)
+
+    def show_help(self):
+        show_help_overlay(self)
 
     def _on_directory_changed(self):
         if self.current_dir and not self.command_bar.mode:
@@ -275,6 +280,10 @@ class WegWindow(Gtk.ApplicationWindow):
         verb = parts[0].lower()
         arg = parts[1].strip() if len(parts) > 1 else ""
 
+        if verb in ("help", "hint", "?"):
+            self.show_help()
+            return
+
         if verb in ("mkdir", "newfolder"):
             if arg:
                 target = os.path.join(self.current_dir, arg)
@@ -347,6 +356,11 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+
+        # ? / F1: Toggle help overlay
+        if keyval in (Gdk.KEY_question, Gdk.KEY_F1):
+            self.show_help()
+            return True
 
         if keyval == Gdk.KEY_q and not ctrl_pressed:
             app = self.get_application()
