@@ -2,7 +2,7 @@
 Theme Engine & Config Manager for weg.
 Supports built-in themes (tokyonight, catppuccin, nord, gruvbox, dracula, matrix)
 AND Omarchy Global System Theming (~/.config/omarchy/current/theme/colors.toml).
-Supports real-time hot-reloading when Omarchy theme changes system-wide.
+Fixed selection text contrast and stripped GTK system blue focus/scroll animations.
 """
 
 import os
@@ -29,6 +29,7 @@ THEMES = {
         "file_color": "#c0caf5",
         "exec_color": "#9ece6a",
         "selection_bg": "#283457",
+        "selection_fg": "#ffffff",
         "selection_accent": "#7dcfff",
         "border_color": "#292e42",
         "entry_bg": "#24283b",
@@ -50,6 +51,7 @@ THEMES = {
         "file_color": "#cdd6f4",
         "exec_color": "#a6e3a1",
         "selection_bg": "#313244",
+        "selection_fg": "#ffffff",
         "selection_accent": "#89b4fa",
         "border_color": "#313244",
         "entry_bg": "#1e1e2e",
@@ -71,6 +73,7 @@ THEMES = {
         "file_color": "#e5e9f0",
         "exec_color": "#a3be8c",
         "selection_bg": "#3b4252",
+        "selection_fg": "#ffffff",
         "selection_accent": "#81a1c1",
         "border_color": "#434c5e",
         "entry_bg": "#3b4252",
@@ -92,6 +95,7 @@ THEMES = {
         "file_color": "#fbf1c7",
         "exec_color": "#b8bb26",
         "selection_bg": "#3c3836",
+        "selection_fg": "#ffffff",
         "selection_accent": "#fabd2f",
         "border_color": "#504945",
         "entry_bg": "#3c3836",
@@ -113,6 +117,7 @@ THEMES = {
         "file_color": "#f8f8f2",
         "exec_color": "#50fa7b",
         "selection_bg": "#44475a",
+        "selection_fg": "#ffffff",
         "selection_accent": "#bd93f9",
         "border_color": "#6272a4",
         "entry_bg": "#44475a",
@@ -134,6 +139,7 @@ THEMES = {
         "file_color": "#00ff66",
         "exec_color": "#33ff33",
         "selection_bg": "#003311",
+        "selection_fg": "#ffffff",
         "selection_accent": "#00ff66",
         "border_color": "#00441b",
         "entry_bg": "#001a08",
@@ -160,10 +166,12 @@ def load_omarchy_palette():
         with open(OMARCHY_COLORS_PATH, "rb") as f:
             data = tomllib.load(f)
 
-        bg = data.get("background", "#16161e")
-        fg = data.get("foreground", "#c0caf5")
-        accent = data.get("accent", "#7aa2f7")
-        sel_bg = data.get("selection_background", "#283457")
+        bg = data.get("background", "#000000")
+        fg = data.get("foreground", "#e7e9ea")
+        accent = data.get("accent", "#ff8852")
+        sel_bg = data.get("selection_background", "#e7e9ea")
+        sel_fg = data.get("selection_foreground", "#000000")
+
         c0 = data.get("color0", "#121212")
         c1 = data.get("color1", "#8a8a8a")
         c2 = data.get("color2", "#e7e9ea")
@@ -179,7 +187,8 @@ def load_omarchy_palette():
             "dir_color": c4 if c4 != bg else accent,
             "file_color": fg,
             "exec_color": c2,
-            "selection_bg": sel_bg if sel_bg != bg else "#283457",
+            "selection_bg": sel_bg,
+            "selection_fg": sel_fg,
             "selection_accent": accent,
             "border_color": c8,
             "entry_bg": c0,
@@ -197,14 +206,22 @@ def load_omarchy_palette():
         return None
 
 def generate_theme_css(palette):
+    sel_fg = palette.get('selection_fg', '#ffffff')
     return f"""
+/* Terminal Global Font Reset & Focus Strip */
 * {{
     font-family: 'JetBrains Mono', 'Fira Code', 'Hack', 'Cascadia Code', 'Liberation Mono', 'monospace';
     font-size: 12px;
     border-radius: 0px;
     box-shadow: none;
+    outline: none;
     text-shadow: none;
     margin: 0px;
+}}
+
+*:focus {{
+    outline: none;
+    box-shadow: none;
 }}
 
 window {{
@@ -245,9 +262,35 @@ scrolledwindow {{
     border: none;
 }}
 
+/* Disable GTK blue overscroll glow & trailing animations */
+undershoot.top, undershoot.bottom, undershoot.left, undershoot.right,
+overshoot.top, overshoot.bottom, overshoot.left, overshoot.right {{
+    background: none;
+}}
+
+scrollbar {{
+    background-color: transparent;
+}}
+
+scrollbar slider {{
+    background-color: {palette['border_color']};
+    min-width: 4px;
+    min-height: 4px;
+    border-radius: 0px;
+}}
+
+scrollbar slider:hover {{
+    background-color: {palette['selection_accent']};
+}}
+
 list {{
     background-color: {palette['bg']};
     color: {palette['fg']};
+}}
+
+list:focus {{
+    outline: none;
+    box-shadow: none;
 }}
 
 row {{
@@ -262,11 +305,24 @@ row:hover {{
     background-color: {palette['entry_bg']};
 }}
 
+row:focus {{
+    outline: none;
+    box-shadow: none;
+}}
+
 row:selected {{
     background-color: {palette['selection_bg']};
-    color: #ffffff;
+    color: {sel_fg};
     border-left: 2px solid {palette['selection_accent']};
     font-weight: bold;
+}}
+
+row:selected label,
+row:selected .dir-item,
+row:selected .file-item,
+row:selected .exec-item,
+row:selected .hidden-item {{
+    color: {sel_fg};
 }}
 
 .dir-item {{
