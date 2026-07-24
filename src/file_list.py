@@ -21,7 +21,7 @@ from gi.repository import Gtk, Gdk, Gio, GLib
 ICON_SETS = {
     "nerdfont": {
         "dir": "󰉋",
-        "exec": "⚡",
+        "exec": "󰜎",
         "python": "",
         "doc": "󰍔",
         "config": "󰅩",
@@ -71,11 +71,13 @@ class FileItem:
         palette = ICON_SETS.get(iconset_name, ICON_SETS["nerdfont"])
         if self.is_dir:
             return palette["dir"]
-        if self.is_exec:
-            return palette["exec"]
-        
+
         ext = os.path.splitext(self.name)[1].lower()
-        if ext in ('.py', '.pyw'):
+
+        # Check extension first so script/source icons take priority over generic exec permission
+        if ext in ('.sh', '.bash', '.zsh', '.fish'):
+            return palette["script"]
+        elif ext in ('.py', '.pyw'):
             return palette["python"]
         elif ext in ('.md', '.markdown', '.txt', '.doc', '.docx', '.pdf'):
             return palette["doc"]
@@ -85,10 +87,11 @@ class FileItem:
             return palette["image"]
         elif ext in ('.zip', '.tar', '.gz', '.bz2', '.7z', '.xz', '.rar'):
             return palette["archive"]
-        elif ext in ('.sh', '.bash', '.zsh', '.fish'):
-            return palette["script"]
         elif ext in ('.rs', '.c', '.cpp', '.h', '.go', '.js', '.ts', '.html', '.css'):
             return palette["code"]
+        elif self.is_exec:
+            return palette["exec"]
+
         return palette["file"]
 
 class FileListWidget(Gtk.ScrolledWindow):
