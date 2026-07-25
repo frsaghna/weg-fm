@@ -78,7 +78,9 @@ class PreviewPaneWidget(Gtk.Box):
         # Image / Thumbnail view
         self.picture = Gtk.Picture()
         self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-        self.picture.set_size_request(240, 240)
+        self.picture.set_hexpand(True)
+        self.picture.set_vexpand(True)
+        self.picture.set_visible(False)
         self.append(self.picture)
 
         # Text View for text/code preview
@@ -90,6 +92,8 @@ class PreviewPaneWidget(Gtk.Box):
         self.scrolled_text = Gtk.ScrolledWindow()
         self.scrolled_text.set_child(self.text_view)
         self.scrolled_text.set_vexpand(True)
+        self.scrolled_text.set_hexpand(True)
+        self.scrolled_text.set_visible(False)
         self.append(self.scrolled_text)
 
         self.current_path = None
