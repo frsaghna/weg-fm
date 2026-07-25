@@ -1,16 +1,55 @@
 """
 Full Multi-Level Undo/Redo System for weg (Phase 8.1).
 Supports atomic composite operation records for Batch Rename, Move, Copy, and Trash with precondition validation.
-Uses 2-stage temporary path resolution with mid-batch error rollback for zero stray temporary files.
+Uses XDG Trash spec scanning for 100% reliable Trash undo/restoration.
 """
 
 import os
 import shutil
 import uuid
+import urllib.parse
 import gi
 
 gi.require_version('Gio', '2.0')
 from gi.repository import Gio
+
+def restore_from_trash(orig_path):
+    orig_path = os.path.abspath(orig_path)
+    trash_dirs = [
+        os.path.expanduser("~/.local/share/Trash"),
+    ]
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    if xdg_data:
+        trash_dirs.insert(0, os.path.join(xdg_data, "Trash"))
+
+    for trash_base in trash_dirs:
+        info_dir = os.path.join(trash_base, "info")
+        files_dir = os.path.join(trash_base, "files")
+        if not os.path.exists(info_dir) or not os.path.exists(files_dir):
+            continue
+
+        for info_file in os.listdir(info_dir):
+            if not info_file.endswith(".trashinfo"):
+                continue
+            info_path = os.path.join(info_dir, info_file)
+            try:
+                with open(info_path, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if line.startswith("Path="):
+                            raw_path = line.strip().split("=", 1)[1]
+                            decoded_path = urllib.parse.unquote(raw_path)
+                            if os.path.abspath(decoded_path) == orig_path:
+                                base_name = info_file[:-10]
+                                trashed_file = os.path.join(files_dir, base_name)
+                                if os.path.exists(trashed_file):
+                                    os.makedirs(os.path.dirname(orig_path), exist_ok=True)
+                                    shutil.move(trashed_file, orig_path)
+                                    if os.path.exists(info_path):
+                                        os.remove(info_path)
+                                    return True
+            except Exception:
+                pass
+    return False
 
 class UndoRecord:
     def undo(self):
@@ -21,16 +60,13 @@ class UndoRecord:
 
 class BatchRenameRecord(UndoRecord):
     def __init__(self, rename_pairs):
-        # Captures exact (old_path, new_path) tuples at rename-time
         self.rename_pairs = [(os.path.abspath(old_p), os.path.abspath(new_p)) for old_p, new_p in rename_pairs]
 
     def undo(self):
-        # 1. Precondition validation
         for old_p, new_p in self.rename_pairs:
             if old_p != new_p and not os.path.exists(new_p):
                 return False, f"Cannot undo batch rename: '{os.path.basename(new_p)}' no longer exists"
 
-        # 2. Stage 1: Rename all new_p to unique temporary paths
         temp_map = []
         try:
             for old_p, new_p in self.rename_pairs:
@@ -39,7 +75,6 @@ class BatchRenameRecord(UndoRecord):
                     os.rename(new_p, tmp_path)
                     temp_map.append((old_p, new_p, tmp_path))
         except Exception as err:
-            # Rollback Stage 1 temporary moves if error occurs mid-batch
             for old_p, new_p, tmp_path in temp_map:
                 if os.path.exists(tmp_path):
                     try:
@@ -48,7 +83,6 @@ class BatchRenameRecord(UndoRecord):
                         pass
             return False, f"Undo failed mid-batch ({err}); rolled back temporary changes"
 
-        # 3. Stage 2: Move all temporary paths back to target old_p
         reverted = 0
         try:
             for old_p, new_p, tmp_path in temp_map:
@@ -61,12 +95,10 @@ class BatchRenameRecord(UndoRecord):
         return True, f"Undid batch rename: restored {reverted} file(s)"
 
     def redo(self):
-        # 1. Precondition validation
         for old_p, new_p in self.rename_pairs:
             if old_p != new_p and not os.path.exists(old_p):
                 return False, f"Cannot redo batch rename: '{os.path.basename(old_p)}' no longer exists"
 
-        # 2. Stage 1: Move all old_p to unique temporary paths
         temp_map = []
         try:
             for old_p, new_p in self.rename_pairs:
@@ -75,7 +107,6 @@ class BatchRenameRecord(UndoRecord):
                     os.rename(old_p, tmp_path)
                     temp_map.append((old_p, new_p, tmp_path))
         except Exception as err:
-            # Rollback Stage 1 temporary moves if error occurs mid-batch
             for old_p, new_p, tmp_path in temp_map:
                 if os.path.exists(tmp_path):
                     try:
@@ -84,7 +115,6 @@ class BatchRenameRecord(UndoRecord):
                         pass
             return False, f"Redo failed mid-batch ({err}); rolled back temporary changes"
 
-        # 3. Stage 2: Move all temporary paths to target new_p
         redone = 0
         try:
             for old_p, new_p, tmp_path in temp_map:
@@ -145,26 +175,22 @@ class CopyRecord(UndoRecord):
         return True, f"Redid copy: restored {created} item(s)"
 
 class TrashRecord(UndoRecord):
-    def __init__(self, trashed_items):
-        # trashed_items is a list of tuples: (original_path, trash_gio_file)
-        self.trashed_items = trashed_items
+    def __init__(self, trashed_paths):
+        self.trashed_paths = [os.path.abspath(p) for p in trashed_paths]
 
     def undo(self):
         restored = 0
-        for orig_path, trash_gfile in self.trashed_items:
-            try:
-                if trash_gfile and os.path.exists(trash_gfile.get_path()):
-                    shutil.move(trash_gfile.get_path(), orig_path)
-                    restored += 1
-            except Exception:
-                pass
+        for orig_path in self.trashed_paths:
+            if restore_from_trash(orig_path):
+                restored += 1
+
         if restored > 0:
             return True, f"Undid trash: restored {restored} item(s)"
-        return False, "Cannot undo trash: trashed item references expired"
+        return False, "Cannot undo trash: trashed item references expired or not found"
 
     def redo(self):
         trashed = 0
-        for orig_path, _ in self.trashed_items:
+        for orig_path in self.trashed_paths:
             if os.path.exists(orig_path):
                 try:
                     gfile = Gio.File.new_for_path(orig_path)

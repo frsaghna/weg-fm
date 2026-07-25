@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """
-Automated unit verification for Phase 8.1 (Atomic Multi-Level Undo/Redo)
-and Phase 8.2 (Browser-Style Directory History).
+Automated unit verification for Phase 8.1 (Atomic Multi-Level Undo/Redo),
+Phase 8.2 (Browser-Style Directory History), and XDG Trash Undo Restoration.
 """
 
 import os
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, Gio
 
 from src.window import WegWindow
 from src.undo_manager import UndoManager, BatchRenameRecord, MoveRecord, CopyRecord, TrashRecord
@@ -43,7 +43,6 @@ class TestUndoAndHistory(unittest.TestCase):
         os.rename(self.file2, r2)
         um.push(BatchRenameRecord(pairs))
 
-        # Single 'u' undo press must atomically revert ALL renamed files
         ok, msg = um.undo()
         self.assertTrue(ok)
         self.assertTrue(os.path.exists(self.file1))
@@ -51,7 +50,6 @@ class TestUndoAndHistory(unittest.TestCase):
         self.assertFalse(os.path.exists(r1))
         self.assertFalse(os.path.exists(r2))
 
-        # Single 'redo' press must atomically re-apply ALL renames
         ok_redo, msg_redo = um.redo()
         self.assertTrue(ok_redo)
         self.assertFalse(os.path.exists(self.file1))
@@ -59,15 +57,39 @@ class TestUndoAndHistory(unittest.TestCase):
         self.assertTrue(os.path.exists(r1))
         self.assertTrue(os.path.exists(r2))
 
+    def test_trash_and_undo_restoration(self):
+        # Create test file in ~/.cache to support XDG Trash (tmpfs /tmp does not support trash)
+        user_cache = os.path.expanduser("~/.cache/weg_test_trash_dir")
+        os.makedirs(user_cache, exist_ok=True)
+        photo_path = os.path.join(user_cache, "photo_sample.jpg")
+        with open(photo_path, "w") as f:
+            f.write("photo data content")
+
+        um = UndoManager()
+        gfile = Gio.File.new_for_path(photo_path)
+        gfile.trash(None)
+        self.assertFalse(os.path.exists(photo_path))
+
+        um.push(TrashRecord([photo_path]))
+
+        # Undo must find .trashinfo and restore photo_sample.jpg to photo_path
+        ok, msg = um.undo()
+        self.assertTrue(ok)
+        self.assertTrue(os.path.exists(photo_path))
+        self.assertIn("restored 1 item(s)", msg)
+
+        import shutil
+        shutil.rmtree(user_cache, ignore_errors=True)
+
     def test_fallback_collision_rename_pairing_restoration(self):
         um = UndoManager()
-        # Test batch rename where one file hit fallback _<n>.<ext>
         f_orig1 = os.path.join(self.tmp_dir, "custom_name.txt")
         f_orig2 = os.path.join(self.tmp_dir, "special.txt")
-        open(f_orig1, "w").close()
-        open(f_orig2, "w").close()
+        with open(f_orig1, "w") as f:
+            f.write("content 1")
+        with open(f_orig2, "w") as f:
+            f.write("content 2")
 
-        # Simulate fallback pairing
         f_new1 = os.path.join(self.tmp_dir, "batch_1.txt")
         f_new2 = os.path.join(self.tmp_dir, "batch_2.txt")
         pairs = [(f_orig1, f_new1), (f_orig2, f_new2)]
@@ -76,7 +98,6 @@ class TestUndoAndHistory(unittest.TestCase):
         os.rename(f_orig2, f_new2)
         um.push(BatchRenameRecord(pairs))
 
-        # Undo must restore exact original file pairs
         ok, msg = um.undo()
         self.assertTrue(ok)
         self.assertTrue(os.path.exists(f_orig1))
@@ -90,15 +111,15 @@ class TestUndoAndHistory(unittest.TestCase):
         fb = os.path.join(self.tmp_dir, "file_b.txt")
         fc = os.path.join(self.tmp_dir, "file_c.txt")
 
-        open(fa, "w").write("content A")
-        open(fb, "w").write("content B")
+        with open(fa, "w") as f:
+            f.write("content A")
+        with open(fb, "w") as f:
+            f.write("content B")
 
-        # Chained rename: b -> c, a -> b
         os.rename(fb, fc)
         os.rename(fa, fb)
         um.push(BatchRenameRecord([(fb, fc), (fa, fb)]))
 
-        # Undo must restore fa and fb without collision
         ok, msg = um.undo()
         self.assertTrue(ok)
         self.assertTrue(os.path.exists(fa))
@@ -108,8 +129,10 @@ class TestUndoAndHistory(unittest.TestCase):
     def test_mid_batch_failure_rollback(self):
         fa = os.path.join(self.tmp_dir, "file_a.txt")
         fb = os.path.join(self.tmp_dir, "file_b.txt")
-        open(fa, "w").close()
-        open(fb, "w").close()
+        with open(fa, "w") as f:
+            f.write("content A")
+        with open(fb, "w") as f:
+            f.write("content B")
 
         r_a = os.path.join(self.tmp_dir, "new_a.txt")
         r_b = os.path.join(self.tmp_dir, "new_b.txt")
@@ -143,10 +166,8 @@ class TestUndoAndHistory(unittest.TestCase):
         os.rename(self.file1, renamed)
         um.push(BatchRenameRecord([(self.file1, renamed)]))
 
-        # Remove renamed file externally
         os.remove(renamed)
 
-        # Undo must fail gracefully without crashing
         ok, msg = um.undo()
         self.assertFalse(ok)
         self.assertIn("no longer exists", msg)
@@ -164,7 +185,6 @@ class TestUndoAndHistory(unittest.TestCase):
         ctx.push_history(sub2)
         self.assertEqual(ctx.current_dir, sub2)
 
-        # Go back
         prev1 = ctx.go_back()
         self.assertEqual(prev1, sub1)
         self.assertEqual(ctx.current_dir, sub1)
@@ -173,7 +193,6 @@ class TestUndoAndHistory(unittest.TestCase):
         self.assertEqual(prev2, self.tmp_dir)
         self.assertEqual(ctx.current_dir, self.tmp_dir)
 
-        # Go forward
         nxt1 = ctx.go_forward()
         self.assertEqual(nxt1, sub1)
         self.assertEqual(ctx.current_dir, sub1)
@@ -188,11 +207,9 @@ class TestUndoAndHistory(unittest.TestCase):
         win.navigate_to(sub1)
         self.assertEqual(win.current_dir, sub1)
 
-        # Press Alt+Left / Alt+h to go back
         win._on_key_pressed(None, Gdk.KEY_h, 0, Gdk.ModifierType.ALT_MASK)
         self.assertEqual(win.current_dir, self.tmp_dir)
 
-        # Press Alt+Right / Alt+l to go forward
         win._on_key_pressed(None, Gdk.KEY_l, 0, Gdk.ModifierType.ALT_MASK)
         self.assertEqual(win.current_dir, sub1)
 

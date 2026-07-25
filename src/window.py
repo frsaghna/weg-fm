@@ -219,20 +219,20 @@ class WegWindow(Gtk.ApplicationWindow):
         if not targets:
             return
 
-        trashed_records = []
+        trashed_paths = []
         for path in targets:
             try:
                 gfile = Gio.File.new_for_path(path)
                 gfile.trash(None)
-                trashed_records.append((path, gfile))
+                trashed_paths.append(path)
             except Exception as e:
                 print(f"[Window] Trash error for {path}: {e}")
 
-        if trashed_records:
-            self.undo_mgr.push(TrashRecord(trashed_records))
+        if trashed_paths:
+            self.undo_mgr.push(TrashRecord(trashed_paths))
 
         self.file_list.load_directory(self.current_dir)
-        self.update_status(f"Moved {len(trashed_records)} item(s) to Trash (u to undo)")
+        self.update_status(f"Moved {len(trashed_paths)} item(s) to Trash (u to undo)")
 
     def permanent_delete_selection(self, confirm_bypass=False):
         targets = self.file_list.get_target_files()
