@@ -84,6 +84,29 @@ class TestUndoAndHistory(unittest.TestCase):
         self.assertFalse(os.path.exists(f_new1))
         self.assertFalse(os.path.exists(f_new2))
 
+    def test_chained_and_cyclic_rename_undo(self):
+        um = UndoManager()
+        fa = os.path.join(self.tmp_dir, "file_a.txt")
+        fb = os.path.join(self.tmp_dir, "file_b.txt")
+        fc = os.path.join(self.tmp_dir, "file_c.txt")
+
+        open(fa, "w").write("content A")
+        open(fb, "w").write("content B")
+
+        # Chained rename: b -> c, a -> b
+        os.rename(fb, fc)
+        os.rename(fa, fb)
+        um.push(BatchRenameRecord([(fb, fc), (fa, fb)]))
+
+        # Undo must restore fa and fb without collision
+        ok, msg = um.undo()
+        self.assertTrue(ok)
+        self.assertTrue(os.path.exists(fa))
+        self.assertTrue(os.path.exists(fb))
+        self.assertFalse(os.path.exists(fc))
+        self.assertEqual(open(fa).read(), "content A")
+        self.assertEqual(open(fb).read(), "content B")
+
     def test_undo_precondition_failure(self):
         um = UndoManager()
         renamed = os.path.join(self.tmp_dir, "beta_renamed.txt")

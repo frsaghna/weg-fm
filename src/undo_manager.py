@@ -1,10 +1,12 @@
 """
 Full Multi-Level Undo/Redo System for weg (Phase 8.1).
 Supports atomic composite operation records for Batch Rename, Move, Copy, and Trash with precondition validation.
+Uses 2-stage temporary path resolution for collision-free chained & cyclic batch renames.
 """
 
 import os
 import shutil
+import uuid
 import gi
 
 gi.require_version('Gio', '2.0')
@@ -23,32 +25,47 @@ class BatchRenameRecord(UndoRecord):
         self.rename_pairs = [(os.path.abspath(old_p), os.path.abspath(new_p)) for old_p, new_p in rename_pairs]
 
     def undo(self):
+        # 1. Precondition validation
         for old_p, new_p in self.rename_pairs:
             if old_p != new_p and not os.path.exists(new_p):
                 return False, f"Cannot undo batch rename: '{os.path.basename(new_p)}' no longer exists"
-            if old_p != new_p and os.path.exists(old_p):
-                return False, f"Cannot undo batch rename: target '{os.path.basename(old_p)}' already exists"
 
-        reverted = 0
-        # Revert in reverse order to prevent collision during swap
-        for old_p, new_p in reversed(self.rename_pairs):
+        # 2. Stage 1: Rename all new_p to unique temporary paths to prevent chained/cyclic collisions
+        temp_map = []
+        for old_p, new_p in self.rename_pairs:
             if old_p != new_p and os.path.exists(new_p):
-                os.rename(new_p, old_p)
+                tmp_path = new_p + f".weg_undo_{uuid.uuid4().hex[:8]}"
+                os.rename(new_p, tmp_path)
+                temp_map.append((old_p, tmp_path))
+
+        # 3. Stage 2: Move all temporary paths back to exact target old_p
+        reverted = 0
+        for old_p, tmp_path in temp_map:
+            if os.path.exists(tmp_path):
+                os.rename(tmp_path, old_p)
                 reverted += 1
 
         return True, f"Undid batch rename: restored {reverted} file(s)"
 
     def redo(self):
+        # 1. Precondition validation
         for old_p, new_p in self.rename_pairs:
             if old_p != new_p and not os.path.exists(old_p):
                 return False, f"Cannot redo batch rename: '{os.path.basename(old_p)}' no longer exists"
-            if old_p != new_p and os.path.exists(new_p):
-                return False, f"Cannot redo batch rename: target '{os.path.basename(new_p)}' already exists"
 
-        redone = 0
+        # 2. Stage 1: Move all old_p to unique temporary paths to prevent chained/cyclic collisions
+        temp_map = []
         for old_p, new_p in self.rename_pairs:
             if old_p != new_p and os.path.exists(old_p):
-                os.rename(old_p, new_p)
+                tmp_path = old_p + f".weg_redo_{uuid.uuid4().hex[:8]}"
+                os.rename(old_p, tmp_path)
+                temp_map.append((new_p, tmp_path))
+
+        # 3. Stage 2: Move all temporary paths to target new_p
+        redone = 0
+        for new_p, tmp_path in temp_map:
+            if os.path.exists(tmp_path):
+                os.rename(tmp_path, new_p)
                 redone += 1
 
         return True, f"Redid batch rename: renamed {redone} file(s)"
