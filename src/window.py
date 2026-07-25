@@ -67,24 +67,30 @@ class WegWindow(Gtk.ApplicationWindow):
         main_box.append(self.path_bar)
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # 2. Content Area (File List + Preview Pane)
-        content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        content_box.set_vexpand(True)
+        # 2. Content Area with Draggable Split Pane (Gtk.Paned)
+        self.paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self.paned.set_vexpand(True)
+        self.paned.set_hexpand(True)
 
         self.file_list = FileListWidget(
             on_open_directory=self.navigate_to,
             on_status_change=self._on_file_list_status_change
         )
-        content_box.append(self.file_list)
+        self.file_list.set_hexpand(True)
 
         self.preview_pane = PreviewPaneWidget()
         self.preview_pane.add_css_class("preview-pane")
         self.preview_pane.set_visible(False)
-        content_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
-        content_box.append(self.preview_pane)
 
-        main_box.append(content_box)
-        main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        self.paned.set_start_child(self.file_list)
+        self.paned.set_end_child(self.preview_pane)
+        self.paned.set_shrink_start_child(False)
+        self.paned.set_shrink_end_child(False)
+        self.paned.set_resize_start_child(True)
+        self.paned.set_resize_end_child(True)
+        self.paned.set_position(550)
+
+        main_box.append(self.paned)
 
         # 3. Status Bar
         self.status_bar = Gtk.Label(label="Press ? for keybinding help", xalign=0.0)

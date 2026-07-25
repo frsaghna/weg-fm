@@ -411,6 +411,16 @@ separator {{
     min-width: 1px;
 }}
 
+paned > separator {{
+    background-color: {palette['border_color']};
+    min-width: 4px;
+    min-height: 4px;
+}}
+
+paned > separator:hover {{
+    background-color: {palette['selection_accent']};
+}}
+
 .preview-pane {{
     background-color: {palette['header_bg']};
     border-left: 1px solid {palette['border_color']};

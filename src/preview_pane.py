@@ -68,7 +68,8 @@ class PreviewPaneWidget(Gtk.Box):
         self.set_margin_bottom(8)
         self.set_margin_start(12)
         self.set_margin_end(12)
-        self.set_size_request(260, -1)
+        self.set_hexpand(True)
+        self.set_vexpand(True)
 
         self.title_label = Gtk.Label(label="Preview", xalign=0.0)
         self.title_label.set_use_underline(False)
@@ -166,7 +167,6 @@ class PreviewPaneWidget(Gtk.Box):
             os.makedirs(target_thumb_dir, exist_ok=True)
             target_thumb_path = os.path.join(target_thumb_dir, f"{md5_uri}.png")
 
-            # Execute ffmpegthumbnailer with explicit error logging
             cmd = ["ffmpegthumbnailer", "-i", path, "-o", target_thumb_path, "-s", "256"]
             try:
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
