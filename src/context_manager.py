@@ -1,6 +1,6 @@
 """
-Multi-Context / Tab State Manager for weg (nnn-style contexts 1-8).
-Each context preserves its own working directory, selection, and view settings.
+Multi-Context / Tab State Manager for weg (nnn-style contexts 1-8)
+with browser-style directory history (Phase 8.2).
 """
 
 import os
@@ -12,6 +12,31 @@ class ContextState:
         self.selected_paths = set()
         self.show_hidden = False
         self.focused_name = None
+        self.history_back = []
+        self.history_forward = []
+
+    def push_history(self, new_path):
+        new_path = os.path.abspath(new_path)
+        if self.current_dir and self.current_dir != new_path:
+            self.history_back.append(self.current_dir)
+            self.history_forward.clear()
+            self.current_dir = new_path
+
+    def go_back(self):
+        if not self.history_back:
+            return None
+        prev_path = self.history_back.pop()
+        self.history_forward.append(self.current_dir)
+        self.current_dir = prev_path
+        return prev_path
+
+    def go_forward(self):
+        if not self.history_forward:
+            return None
+        next_path = self.history_forward.pop()
+        self.history_back.append(self.current_dir)
+        self.current_dir = next_path
+        return next_path
 
 class ContextManager:
     def __init__(self, initial_dir=None, total_contexts=8):

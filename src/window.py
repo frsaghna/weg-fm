@@ -1,7 +1,7 @@
 """
 Main application window for weg with Neovim / LazyVim ergonomics,
 nnn-style 8-context/tab switching (keys 1-8), Omarchy global system theme support,
-and non-blocking async shell & archive command execution.
+full multi-level Undo/Redo stack (Phase 8.1), and directory history back/forward (Phase 8.2).
 """
 
 import os
@@ -27,6 +27,7 @@ from src.delete_dialog import show_delete_confirmation
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 from src.context_manager import ContextManager
 from src.archive_utils import create_zip_archive, create_tar_archive, extract_archive
+from src.undo_manager import UndoManager, RenameRecord, MoveRecord, CopyRecord, TrashRecord
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
@@ -40,8 +41,11 @@ class WegWindow(Gtk.ApplicationWindow):
             initial_dir = os.path.expanduser("~")
         self.current_dir = os.path.abspath(initial_dir)
 
-        # Multi-Context Manager (nnn-style 1-8 tabs)
+        # Multi-Context Manager (nnn-style 1-8 tabs + Directory History)
         self.context_mgr = ContextManager(initial_dir=self.current_dir, total_contexts=8)
+
+        # Multi-Level Undo Manager (Phase 8.1)
+        self.undo_mgr = UndoManager(max_depth=50)
 
         self.display = Gdk.Display.get_default()
         self.clipboard = self.display.get_clipboard() if self.display else None
@@ -101,6 +105,51 @@ class WegWindow(Gtk.ApplicationWindow):
 
         self.navigate_to(self.current_dir)
 
+    def navigate_to(self, path, record_history=True):
+        path = os.path.abspath(path)
+        if not os.path.isdir(path):
+            return
+
+        if record_history and path != self.current_dir:
+            active_ctx = self.context_mgr.get_active()
+            active_ctx.push_history(path)
+
+        self.current_dir = path
+        self.path_bar.set_path(path)
+        self.file_list.load_directory(path)
+        self.monitor.set_directory(path)
+        self.file_list.grab_focus()
+
+    def go_back(self):
+        active_ctx = self.context_mgr.get_active()
+        prev_path = active_ctx.go_back()
+        if prev_path:
+            self.navigate_to(prev_path, record_history=False)
+            self.update_status(f"History Back: {os.path.basename(prev_path) or prev_path}")
+        else:
+            self.update_status("Already at oldest history entry")
+
+    def go_forward(self):
+        active_ctx = self.context_mgr.get_active()
+        next_path = active_ctx.go_forward()
+        if next_path:
+            self.navigate_to(next_path, record_history=False)
+            self.update_status(f"History Forward: {os.path.basename(next_path) or next_path}")
+        else:
+            self.update_status("Already at newest history entry")
+
+    def undo(self):
+        ok, msg = self.undo_mgr.undo()
+        self.update_status(msg)
+        if ok:
+            self.file_list.load_directory(self.current_dir)
+
+    def redo(self):
+        ok, msg = self.undo_mgr.redo()
+        self.update_status(msg)
+        if ok:
+            self.file_list.load_directory(self.current_dir)
+
     def switch_context(self, target_context_id):
         if not (1 <= target_context_id <= 8):
             return
@@ -119,19 +168,8 @@ class WegWindow(Gtk.ApplicationWindow):
         self.path_bar.update_contexts(active_id=target_context_id)
         self.file_list.show_hidden = nxt.show_hidden
         self.file_list.selected_paths = set(nxt.selected_paths)
-        self.navigate_to(nxt.current_dir)
+        self.navigate_to(nxt.current_dir, record_history=False)
         self.update_status(f"Switched to Context {target_context_id} ({os.path.basename(nxt.current_dir) or nxt.current_dir})")
-
-    def navigate_to(self, path):
-        path = os.path.abspath(path)
-        if not os.path.isdir(path):
-            return
-
-        self.current_dir = path
-        self.path_bar.set_path(path)
-        self.file_list.load_directory(path)
-        self.monitor.set_directory(path)
-        self.file_list.grab_focus()
 
     def update_status(self, text):
         self.status_bar.set_text(text)
@@ -173,17 +211,20 @@ class WegWindow(Gtk.ApplicationWindow):
         if not targets:
             return
 
-        trashed_count = 0
+        trashed_records = []
         for path in targets:
             try:
                 gfile = Gio.File.new_for_path(path)
                 gfile.trash(None)
-                trashed_count += 1
+                trashed_records.append((path, gfile))
             except Exception as e:
                 print(f"[Window] Trash error for {path}: {e}")
 
+        if trashed_records:
+            self.undo_mgr.push(TrashRecord(trashed_records))
+
         self.file_list.load_directory(self.current_dir)
-        self.update_status(f"Moved {trashed_count} item(s) to Trash")
+        self.update_status(f"Moved {len(trashed_records)} item(s) to Trash (u to undo)")
 
     def permanent_delete_selection(self, confirm_bypass=False):
         targets = self.file_list.get_target_files()
@@ -253,7 +294,9 @@ class WegWindow(Gtk.ApplicationWindow):
 
                 action = lines[0].lower()
                 uris = lines[1:]
-                count = 0
+                src_paths = []
+                dest_paths = []
+
                 for uri in uris:
                     gfile = Gio.File.new_for_uri(uri)
                     src_path = gfile.get_path()
@@ -269,9 +312,18 @@ class WegWindow(Gtk.ApplicationWindow):
                                 shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
                             else:
                                 shutil.copy2(src_path, dest_path)
-                        count += 1
+                        src_paths.append(src_path)
+                        dest_paths.append(dest_path)
+
+                if dest_paths:
+                    if action == "cut":
+                        for sp, dp in zip(src_paths, dest_paths):
+                            self.undo_mgr.push(MoveRecord(sp, dp))
+                    else:
+                        self.undo_mgr.push(CopyRecord(dest_paths, src_paths))
+
                 self.file_list.load_directory(self.current_dir)
-                self.update_status(f"Pasted {count} item(s)")
+                self.update_status(f"Pasted {len(dest_paths)} item(s) (u to undo)")
         except Exception as e:
             print(f"[Window] Paste error: {e}")
 
@@ -279,7 +331,8 @@ class WegWindow(Gtk.ApplicationWindow):
         try:
             val = clipboard.read_value_finish(result)
             if isinstance(val, Gdk.FileList):
-                count = 0
+                src_paths = []
+                dest_paths = []
                 for f in val.get_files():
                     src_path = f.get_path()
                     if src_path and os.path.exists(src_path):
@@ -291,9 +344,14 @@ class WegWindow(Gtk.ApplicationWindow):
                             shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
                         else:
                             shutil.copy2(src_path, dest_path)
-                        count += 1
+                        src_paths.append(src_path)
+                        dest_paths.append(dest_path)
+
+                if dest_paths:
+                    self.undo_mgr.push(CopyRecord(dest_paths, src_paths))
+
                 self.file_list.load_directory(self.current_dir)
-                self.update_status(f"Pasted {count} item(s)")
+                self.update_status(f"Pasted {len(dest_paths)} item(s) (u to undo)")
         except Exception as e:
             print(f"[Window] Paste GdkFileList error: {e}")
 
@@ -328,6 +386,22 @@ class WegWindow(Gtk.ApplicationWindow):
 
         if verb in ("help", "hint", "?"):
             self.show_help()
+            return
+
+        if verb in ("undo",):
+            self.undo()
+            return
+
+        if verb in ("redo",):
+            self.redo()
+            return
+
+        if verb in ("back",):
+            self.go_back()
+            return
+
+        if verb in ("forward",):
+            self.go_forward()
             return
 
         if verb in ("theme", "themes"):
@@ -457,7 +531,8 @@ class WegWindow(Gtk.ApplicationWindow):
                 old_path = targets[0]
                 new_path = os.path.join(os.path.dirname(old_path), arg)
                 os.rename(old_path, new_path)
-                self.update_status(f"Renamed to '{arg}'")
+                self.undo_mgr.push(RenameRecord(old_path, new_path))
+                self.update_status(f"Renamed to '{arg}' (u to undo)")
             else:
                 for idx, old_path in enumerate(targets, 1):
                     ext = os.path.splitext(old_path)[1]
@@ -467,7 +542,8 @@ class WegWindow(Gtk.ApplicationWindow):
                         new_name = f"{arg}_{idx}{ext}"
                     new_path = os.path.join(os.path.dirname(old_path), new_name)
                     os.rename(old_path, new_path)
-                self.update_status(f"Batch renamed {len(targets)} item(s)")
+                    self.undo_mgr.push(RenameRecord(old_path, new_path))
+                self.update_status(f"Batch renamed {len(targets)} item(s) (u to undo)")
 
         elif verb in ("delete", "rm"):
             self.permanent_delete_selection()
@@ -483,9 +559,28 @@ class WegWindow(Gtk.ApplicationWindow):
             return False
 
         ctrl_pressed = bool(state & Gdk.ModifierType.CONTROL_MASK)
+        alt_pressed = bool(state & Gdk.ModifierType.ALT_MASK)
+
+        # Directory History Back / Forward (Alt+Left / Alt+Right or Alt+h / Alt+l or Ctrl+O / Ctrl+I)
+        if (alt_pressed and keyval in (Gdk.KEY_Left, Gdk.KEY_h)) or (ctrl_pressed and keyval == Gdk.KEY_o):
+            self.go_back()
+            return True
+
+        if (alt_pressed and keyval in (Gdk.KEY_Right, Gdk.KEY_l)) or (ctrl_pressed and keyval == Gdk.KEY_i):
+            self.go_forward()
+            return True
+
+        # Multi-Level Undo / Redo (u or Ctrl+Z to Undo, Ctrl+R or Ctrl+Y to Redo)
+        if (keyval == Gdk.KEY_u and not ctrl_pressed and not alt_pressed) or (ctrl_pressed and keyval == Gdk.KEY_z):
+            self.undo()
+            return True
+
+        if (ctrl_pressed and keyval in (Gdk.KEY_r, Gdk.KEY_y)):
+            self.redo()
+            return True
 
         # nnn-style Context / Tab switching using keys 1-8
-        if keyval in (Gdk.KEY_1, Gdk.KEY_2, Gdk.KEY_3, Gdk.KEY_4, Gdk.KEY_5, Gdk.KEY_6, Gdk.KEY_7, Gdk.KEY_8) and not ctrl_pressed:
+        if keyval in (Gdk.KEY_1, Gdk.KEY_2, Gdk.KEY_3, Gdk.KEY_4, Gdk.KEY_5, Gdk.KEY_6, Gdk.KEY_7, Gdk.KEY_8) and not ctrl_pressed and not alt_pressed:
             target_c_id = keyval - Gdk.KEY_0
             self.switch_context(target_c_id)
             return True
@@ -571,7 +666,7 @@ class WegWindow(Gtk.ApplicationWindow):
             self.file_list.toggle_selection_focused()
             return True
 
-        elif keyval == Gdk.KEY_r and not ctrl_pressed:
+        elif keyval == Gdk.KEY_r and not ctrl_pressed and not alt_pressed:
             self.command_bar.activate_mode(':', initial_text="rename ")
             return True
 

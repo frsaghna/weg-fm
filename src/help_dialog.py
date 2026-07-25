@@ -12,6 +12,8 @@ SECTIONS = [
         "NAVIGATION & VIM MOTIONS",
         [
             ("1  -  8", "Switch nnn-style context / tab (1-8, top-right indicator)"),
+            ("Alt+←  /  Alt+h  /  Ctrl+O", "Directory history back"),
+            ("Alt+→  /  Alt+l  /  Ctrl+I", "Directory history forward"),
             ("h  /  ←  /  Backspace", "Navigate to parent directory (..)"),
             ("l  /  →  /  Enter", "Open file or enter directory"),
             ("j  /  ↓", "Move selection down"),
@@ -56,6 +58,8 @@ SECTIONS = [
             ("Ctrl+C", "Copy selected file(s) to clipboard"),
             ("Ctrl+X", "Cut selected file(s) to clipboard"),
             ("Ctrl+V", "Paste file(s) from clipboard"),
+            ("u  /  Ctrl+Z", "Undo last operation (rename, move, copy, trash)"),
+            ("Ctrl+R  /  Ctrl+Y", "Redo last undone operation"),
             ("x", "Move selection to Trash (GIO Trash API)"),
             ("Shift+X", "Permanently delete selection (with confirmation)"),
         ]
