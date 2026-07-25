@@ -51,6 +51,7 @@ class TestFrecencyQuickJump(unittest.TestCase):
     def test_window_z_command(self):
         app = Gtk.Application(application_id="fm.weg.TestFrecencyWindow")
         win = WegWindow(app, initial_dir=self.tmp_dir)
+        win.frecency = FrecencyTracker(storage_path=self.json_file)
 
         # Record visits
         win.navigate_to(self.dir_projects)

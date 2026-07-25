@@ -23,6 +23,8 @@ gi.require_version('Gio', '2.0')
 gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk, Gio, GLib
 
+from src.fuzzy import fuzzy_filter_items
+
 # Icon Sets
 ICON_SETS = {
     "nerdfont": {
@@ -258,12 +260,13 @@ class FileListWidget(Gtk.ScrolledWindow):
             self._apply_current_filter()
             return
 
-        query_lower = query.lower()
         filtered = self.all_items
         if not self.show_hidden:
             filtered = [item for item in filtered if not item.name.startswith('.')]
-        filtered = [item for item in filtered if query_lower in item.name.lower()]
-        self._populate_list(filtered)
+        
+        # Fuzzy subsequence matching & ranking
+        fuzzy_matched = fuzzy_filter_items(filtered, query, key_fn=lambda item: item.name)
+        self._populate_list(fuzzy_matched)
 
     def try_auto_open_single_folder(self):
         """Called on filter activation (Enter). Enters directory if exactly ONE folder matches."""
@@ -305,8 +308,9 @@ class FileListWidget(Gtk.ScrolledWindow):
                 iconset=self.iconset
             ))
 
-        search_items.sort(key=lambda item: (not item.is_dir, item.display_path.lower()))
-        self._populate_list(search_items)
+        # Fuzzy subsequence matching & ranking for recursive search results
+        fuzzy_search_items = fuzzy_filter_items(search_items, query, key_fn=lambda item: item.display_path)
+        self._populate_list(fuzzy_search_items)
 
     def _populate_list(self, items, preserve_idx=None):
         self.displayed_items = items
