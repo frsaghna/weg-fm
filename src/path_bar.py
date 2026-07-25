@@ -25,6 +25,7 @@ class PathBarWidget(Gtk.Box):
 
         # Left: Path Display Label
         self.path_label = Gtk.Label(label="", xalign=0.0)
+        self.path_label.set_use_underline(False)
         self.path_label.add_css_class("path-label")
         self.path_label.set_hexpand(True)
         self.append(self.path_label)
@@ -42,6 +43,7 @@ class PathBarWidget(Gtk.Box):
 
         # Right: Simple Tight Context Indicator Label e.g. "[1] 2 3 4 5 6 7 8"
         self.context_label = Gtk.Label(label="", xalign=1.0)
+        self.context_label.set_use_underline(False)
         self.context_label.add_css_class("context-indicator")
         
         click_gesture = Gtk.GestureClick()

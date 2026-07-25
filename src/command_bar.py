@@ -29,10 +29,12 @@ class CommandBarWidget(Gtk.Box):
         self.mode = None # None, '/', '>', ':'
 
         self.badge_label = Gtk.Label(label="NORMAL")
+        self.badge_label.set_use_underline(False)
         self.badge_label.add_css_class("mode-badge")
         self.append(self.badge_label)
 
         self.prefix_label = Gtk.Label(label=":")
+        self.prefix_label.set_use_underline(False)
         self.entry = Gtk.Entry()
         self.entry.set_hexpand(True)
         self.entry.set_placeholder_text("Press /, >, or : for commands (e.g. 'theme nord', '/search')")

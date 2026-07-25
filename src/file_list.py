@@ -330,6 +330,7 @@ class FileListWidget(Gtk.ScrolledWindow):
             is_selected = item.path in self.selected_paths
             sel_text = "[x] " if is_selected else "[ ] "
             sel_label = Gtk.Label(label=sel_text)
+            sel_label.set_use_underline(False)
             if is_selected:
                 sel_label.add_css_class("selected-checkbox")
             row_box.append(sel_label)
@@ -338,6 +339,7 @@ class FileListWidget(Gtk.ScrolledWindow):
             label_text = f"{item.icon}  {disp}{'/' if item.is_dir else ''}"
 
             lbl = Gtk.Label(label=label_text, xalign=0.0)
+            lbl.set_use_underline(False)
             if item.name.startswith('.'):
                 lbl.add_css_class("hidden-item")
             elif item.is_dir:

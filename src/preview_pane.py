@@ -71,6 +71,7 @@ class PreviewPaneWidget(Gtk.Box):
         self.set_size_request(260, -1)
 
         self.title_label = Gtk.Label(label="Preview", xalign=0.0)
+        self.title_label.set_use_underline(False)
         self.title_label.set_markup("<b>Preview</b>")
         self.append(self.title_label)
 

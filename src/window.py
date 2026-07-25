@@ -88,6 +88,7 @@ class WegWindow(Gtk.ApplicationWindow):
 
         # 3. Status Bar
         self.status_bar = Gtk.Label(label="Press ? for keybinding help", xalign=0.0)
+        self.status_bar.set_use_underline(False)
         self.status_bar.add_css_class("status-bar")
         main_box.append(self.status_bar)
 

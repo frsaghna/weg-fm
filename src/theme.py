@@ -216,10 +216,21 @@ def generate_theme_css(palette):
     box-shadow: none;
     outline: none;
     text-shadow: none;
+    text-decoration: none;
+    text-decoration-line: none;
     margin: 0px;
 }}
 
-*:focus {{
+*:focus, *:hover, *:active {{
+    outline: none;
+    box-shadow: none;
+    text-decoration: none;
+    text-decoration-line: none;
+}}
+
+label, label:focus, label:hover, label:active {{
+    text-decoration: none;
+    text-decoration-line: none;
     outline: none;
     box-shadow: none;
 }}
