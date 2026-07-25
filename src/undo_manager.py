@@ -1,7 +1,7 @@
 """
 Full Multi-Level Undo/Redo System for weg (Phase 8.1).
 Supports atomic composite operation records for Batch Rename, Move, Copy, and Trash with precondition validation.
-Uses 2-stage temporary path resolution for collision-free chained & cyclic batch renames.
+Uses 2-stage temporary path resolution with mid-batch error rollback for zero stray temporary files.
 """
 
 import os
@@ -30,20 +30,33 @@ class BatchRenameRecord(UndoRecord):
             if old_p != new_p and not os.path.exists(new_p):
                 return False, f"Cannot undo batch rename: '{os.path.basename(new_p)}' no longer exists"
 
-        # 2. Stage 1: Rename all new_p to unique temporary paths to prevent chained/cyclic collisions
+        # 2. Stage 1: Rename all new_p to unique temporary paths
         temp_map = []
-        for old_p, new_p in self.rename_pairs:
-            if old_p != new_p and os.path.exists(new_p):
-                tmp_path = new_p + f".weg_undo_{uuid.uuid4().hex[:8]}"
-                os.rename(new_p, tmp_path)
-                temp_map.append((old_p, tmp_path))
+        try:
+            for old_p, new_p in self.rename_pairs:
+                if old_p != new_p and os.path.exists(new_p):
+                    tmp_path = new_p + f".weg_undo_{uuid.uuid4().hex[:8]}"
+                    os.rename(new_p, tmp_path)
+                    temp_map.append((old_p, new_p, tmp_path))
+        except Exception as err:
+            # Rollback Stage 1 temporary moves if error occurs mid-batch
+            for old_p, new_p, tmp_path in temp_map:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.rename(tmp_path, new_p)
+                    except Exception:
+                        pass
+            return False, f"Undo failed mid-batch ({err}); rolled back temporary changes"
 
-        # 3. Stage 2: Move all temporary paths back to exact target old_p
+        # 3. Stage 2: Move all temporary paths back to target old_p
         reverted = 0
-        for old_p, tmp_path in temp_map:
-            if os.path.exists(tmp_path):
-                os.rename(tmp_path, old_p)
-                reverted += 1
+        try:
+            for old_p, new_p, tmp_path in temp_map:
+                if os.path.exists(tmp_path):
+                    os.rename(tmp_path, old_p)
+                    reverted += 1
+        except Exception as err:
+            return False, f"Undo error during restoration ({err}); restored {reverted} file(s)"
 
         return True, f"Undid batch rename: restored {reverted} file(s)"
 
@@ -53,20 +66,33 @@ class BatchRenameRecord(UndoRecord):
             if old_p != new_p and not os.path.exists(old_p):
                 return False, f"Cannot redo batch rename: '{os.path.basename(old_p)}' no longer exists"
 
-        # 2. Stage 1: Move all old_p to unique temporary paths to prevent chained/cyclic collisions
+        # 2. Stage 1: Move all old_p to unique temporary paths
         temp_map = []
-        for old_p, new_p in self.rename_pairs:
-            if old_p != new_p and os.path.exists(old_p):
-                tmp_path = old_p + f".weg_redo_{uuid.uuid4().hex[:8]}"
-                os.rename(old_p, tmp_path)
-                temp_map.append((new_p, tmp_path))
+        try:
+            for old_p, new_p in self.rename_pairs:
+                if old_p != new_p and os.path.exists(old_p):
+                    tmp_path = old_p + f".weg_redo_{uuid.uuid4().hex[:8]}"
+                    os.rename(old_p, tmp_path)
+                    temp_map.append((old_p, new_p, tmp_path))
+        except Exception as err:
+            # Rollback Stage 1 temporary moves if error occurs mid-batch
+            for old_p, new_p, tmp_path in temp_map:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.rename(tmp_path, old_p)
+                    except Exception:
+                        pass
+            return False, f"Redo failed mid-batch ({err}); rolled back temporary changes"
 
         # 3. Stage 2: Move all temporary paths to target new_p
         redone = 0
-        for new_p, tmp_path in temp_map:
-            if os.path.exists(tmp_path):
-                os.rename(tmp_path, new_p)
-                redone += 1
+        try:
+            for old_p, new_p, tmp_path in temp_map:
+                if os.path.exists(tmp_path):
+                    os.rename(tmp_path, new_p)
+                    redone += 1
+        except Exception as err:
+            return False, f"Redo error during restoration ({err}); applied {redone} rename(s)"
 
         return True, f"Redid batch rename: renamed {redone} file(s)"
 

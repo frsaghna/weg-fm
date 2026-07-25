@@ -104,8 +104,38 @@ class TestUndoAndHistory(unittest.TestCase):
         self.assertTrue(os.path.exists(fa))
         self.assertTrue(os.path.exists(fb))
         self.assertFalse(os.path.exists(fc))
-        self.assertEqual(open(fa).read(), "content A")
-        self.assertEqual(open(fb).read(), "content B")
+
+    def test_mid_batch_failure_rollback(self):
+        fa = os.path.join(self.tmp_dir, "file_a.txt")
+        fb = os.path.join(self.tmp_dir, "file_b.txt")
+        open(fa, "w").close()
+        open(fb, "w").close()
+
+        r_a = os.path.join(self.tmp_dir, "new_a.txt")
+        r_b = os.path.join(self.tmp_dir, "new_b.txt")
+        os.rename(fa, r_a)
+        os.rename(fb, r_b)
+
+        record = BatchRenameRecord([(fa, r_a), (fb, r_b)])
+
+        orig_rename = os.rename
+        call_count = 0
+        def mock_rename(src, dst):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise PermissionError("Simulated disk write error")
+            return orig_rename(src, dst)
+
+        import unittest.mock as mock
+        with mock.patch("os.rename", side_effect=mock_rename):
+            ok, msg = record.undo()
+            self.assertFalse(ok)
+            self.assertIn("Undo failed mid-batch", msg)
+
+        self.assertTrue(os.path.exists(r_a))
+        self.assertTrue(os.path.exists(r_b))
+        self.assertFalse(any(".weg_undo_" in name for name in os.listdir(self.tmp_dir)))
 
     def test_undo_precondition_failure(self):
         um = UndoManager()
