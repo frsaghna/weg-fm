@@ -28,6 +28,7 @@ from src.theme import init_theme, set_theme, get_current_theme, get_available_th
 from src.context_manager import ContextManager
 from src.archive_utils import create_zip_archive, create_tar_archive, extract_archive
 from src.undo_manager import UndoManager, RenameRecord, MoveRecord, CopyRecord, TrashRecord
+from src.frecency import FrecencyTracker
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
@@ -46,6 +47,9 @@ class WegWindow(Gtk.ApplicationWindow):
 
         # Multi-Level Undo Manager (Phase 8.1)
         self.undo_mgr = UndoManager(max_depth=50)
+
+        # Frecency Quick Jump Engine (Phase 8.3)
+        self.frecency = FrecencyTracker()
 
         self.display = Gdk.Display.get_default()
         self.clipboard = self.display.get_clipboard() if self.display else None
@@ -115,6 +119,9 @@ class WegWindow(Gtk.ApplicationWindow):
             active_ctx.push_history(path)
 
         self.current_dir = path
+        if hasattr(self, 'frecency'):
+            self.frecency.record_visit(path)
+
         self.path_bar.set_path(path)
         self.file_list.load_directory(path)
         self.monitor.set_directory(path)
@@ -386,6 +393,18 @@ class WegWindow(Gtk.ApplicationWindow):
 
         if verb in ("help", "hint", "?"):
             self.show_help()
+            return
+
+        if verb in ("z", "jump"):
+            if not arg:
+                self.update_status("Usage: :z <fragment> (frecency quick jump)")
+                return
+            target = self.frecency.query(arg)
+            if target:
+                self.navigate_to(target)
+                self.update_status(f"Jumped to '{target}'")
+            else:
+                self.update_status(f"No matching frecent directory for '{arg}'")
             return
 
         if verb in ("undo",):
@@ -660,6 +679,10 @@ class WegWindow(Gtk.ApplicationWindow):
             return True
         elif keyval == Gdk.KEY_colon:
             self.command_bar.activate_mode(':')
+            return True
+
+        elif keyval == Gdk.KEY_z and not ctrl_pressed and not alt_pressed:
+            self.command_bar.activate_mode(':', initial_text="z ")
             return True
 
         elif keyval == Gdk.KEY_space:

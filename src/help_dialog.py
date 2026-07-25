@@ -12,6 +12,7 @@ SECTIONS = [
         "NAVIGATION & VIM MOTIONS",
         [
             ("1  -  8", "Switch nnn-style context / tab (1-8, top-right indicator)"),
+            ("z", "zoxide-style frecency quick jump (:z <fragment>)"),
             ("Alt+←  /  Alt+h  /  Ctrl+O", "Directory history back"),
             ("Alt+→  /  Alt+l  /  Ctrl+I", "Directory history forward"),
             ("h  /  ←  /  Backspace", "Navigate to parent directory (..)"),
