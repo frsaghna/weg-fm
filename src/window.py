@@ -1,11 +1,13 @@
 """
 Main application window for weg with Neovim / LazyVim ergonomics,
-nnn-style 8-context/tab switching (keys 1-8), and Omarchy global system theme support.
+nnn-style 8-context/tab switching (keys 1-8), Omarchy global system theme support,
+and non-blocking async shell & archive command execution.
 """
 
 import os
 import shutil
 import subprocess
+import threading
 import time
 import gi
 
@@ -24,6 +26,7 @@ from src.theme_dialog import show_theme_picker
 from src.delete_dialog import show_delete_confirmation
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 from src.context_manager import ContextManager
+from src.archive_utils import create_zip_archive, create_tar_archive, extract_archive
 
 class WegWindow(Gtk.ApplicationWindow):
     def __init__(self, app, initial_dir=None):
@@ -294,6 +297,27 @@ class WegWindow(Gtk.ApplicationWindow):
         except Exception as e:
             print(f"[Window] Paste GdkFileList error: {e}")
 
+    def _run_async_shell_command(self, cmd_text):
+        self.update_status(f"Executing: {cmd_text}...")
+
+        def _worker():
+            try:
+                res = subprocess.run(cmd_text, shell=True, cwd=self.current_dir, capture_output=True, text=True, timeout=30)
+                msg = res.stdout.strip() or res.stderr.strip() or f"Command exit code: {res.returncode}"
+            except subprocess.TimeoutExpired:
+                msg = "Command timed out (30s)"
+            except Exception as e:
+                msg = f"Execution error: {e}"
+
+            def _on_done():
+                self.update_status(msg[:100])
+                self.file_list.load_directory(self.current_dir)
+                return False
+
+            GLib.idle_add(_on_done)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def execute_command(self, cmd_text):
         parts = cmd_text.split(maxsplit=1)
         if not parts:
@@ -327,6 +351,63 @@ class WegWindow(Gtk.ApplicationWindow):
                 self.switch_context(int(arg))
             else:
                 self.update_status(f"Current context: {self.context_mgr.active_id}. Usage: :context <1-8>")
+            return
+
+        if verb in ("zip", "tar"):
+            targets = self.file_list.get_target_files()
+            if not targets:
+                self.update_status("No files selected to archive")
+                return
+
+            default_name = os.path.basename(targets[0]) if len(targets) == 1 else "archive"
+            archive_name = arg if arg else default_name
+            out_path = os.path.join(self.current_dir, archive_name)
+
+            self.update_status(f"Compressing {len(targets)} item(s)...")
+
+            def _zip_worker():
+                try:
+                    if verb == "zip":
+                        res_path = create_zip_archive(targets, out_path)
+                    else:
+                        res_path = create_tar_archive(targets, out_path)
+                    msg = f"Created '{os.path.basename(res_path)}'"
+                except Exception as e:
+                    msg = f"Archive error: {e}"
+
+                def _on_zip_done():
+                    self.update_status(msg)
+                    self.file_list.load_directory(self.current_dir)
+                    return False
+
+                GLib.idle_add(_on_zip_done)
+
+            threading.Thread(target=_zip_worker, daemon=True).start()
+            return
+
+        if verb in ("unzip", "extract", "untar"):
+            targets = self.file_list.get_target_files()
+            archive_path = targets[0] if (targets and os.path.exists(targets[0])) else (os.path.join(self.current_dir, arg) if arg else None)
+            if not archive_path or not os.path.exists(archive_path):
+                self.update_status("Select an archive file to extract")
+                return
+
+            self.update_status(f"Extracting '{os.path.basename(archive_path)}'...")
+
+            def _extract_worker():
+                try:
+                    ok, msg = extract_archive(archive_path, self.current_dir)
+                except Exception as e:
+                    msg = f"Extract error: {e}"
+
+                def _on_extract_done():
+                    self.update_status(msg)
+                    self.file_list.load_directory(self.current_dir)
+                    return False
+
+                GLib.idle_add(_on_extract_done)
+
+            threading.Thread(target=_extract_worker, daemon=True).start()
             return
 
         if verb in ("q", "quit"):
@@ -392,12 +473,7 @@ class WegWindow(Gtk.ApplicationWindow):
             self.permanent_delete_selection()
 
         else:
-            try:
-                res = subprocess.run(cmd_text, shell=True, cwd=self.current_dir, capture_output=True, text=True)
-                msg = res.stdout.strip() or res.stderr.strip() or f"Command exit code: {res.returncode}"
-                self.update_status(msg[:80])
-            except Exception as e:
-                self.update_status(f"Execution error: {e}")
+            self._run_async_shell_command(cmd_text)
 
         self.file_list.load_directory(self.current_dir)
 

@@ -10,7 +10,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk
 
-KNOWN_COMMAND_VERBS = ("theme", "icons", "iconset", "mkdir", "touch", "new", "rename", "mv", "delete", "rm", "help", "hint", "?")
+KNOWN_COMMAND_VERBS = ("theme", "icons", "iconset", "mkdir", "touch", "new", "rename", "mv", "delete", "rm", "help", "hint", "?", "zip", "unzip", "extract", "tar", "untar", "context", "tab")
 
 class CommandBarWidget(Gtk.Box):
     def __init__(self, on_filter_change, on_search_query, on_command_execute, on_cancel, on_filter_activate=None):
