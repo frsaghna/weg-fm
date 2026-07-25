@@ -106,7 +106,7 @@ model.
   single hovered file otherwise.
 - **Explicit Multi-File Command Semantics**:
   - **Batch Rename (`:rename` / `r`)**: Uses pattern-based index interpolation `{n}` (e.g. `:rename photo_{n}.jpg` -> `photo_1.jpg`, `photo_2.jpg`), or appends `_<n>.<ext>` fallback to prevent overwrite collisions.
-  - **Batch Undo Granularity**: Multi-file `Paste` (`CopyRecord`) and multi-file `Trash` (`TrashRecord`) undo as a single atomic transaction on `u`. Batch renames push sequential per-file records.
+  - **Batch Undo Granularity**: Multi-file `Paste` (`CopyRecord`), multi-file `Trash` (`TrashRecord`), and multi-file `Batch Rename` (`BatchRenameRecord`) all undo as **a single atomic transaction** when pressing `u`. Reverts all batch operations in a single press without requiring sequential mashing.
 
 ### 3.4 Clipboard (native, not text-only)
 - `Ctrl+C` / `Ctrl+X` / `Ctrl+V` — real file objects, not paths-as-text.

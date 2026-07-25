@@ -1,6 +1,6 @@
 """
 Full Multi-Level Undo/Redo System for weg (Phase 8.1).
-Supports operation records for Rename, Move, Copy, and Trash with precondition validation.
+Supports atomic composite operation records for Batch Rename, Move, Copy, and Trash with precondition validation.
 """
 
 import os
@@ -17,28 +17,41 @@ class UndoRecord:
     def redo(self):
         raise NotImplementedError
 
-class RenameRecord(UndoRecord):
-    def __init__(self, old_path, new_path):
-        self.old_path = os.path.abspath(old_path)
-        self.new_path = os.path.abspath(new_path)
-        self.old_name = os.path.basename(old_path)
-        self.new_name = os.path.basename(new_path)
+class BatchRenameRecord(UndoRecord):
+    def __init__(self, rename_pairs):
+        # Captures exact (old_path, new_path) tuples at rename-time
+        self.rename_pairs = [(os.path.abspath(old_p), os.path.abspath(new_p)) for old_p, new_p in rename_pairs]
 
     def undo(self):
-        if not os.path.exists(self.new_path):
-            return False, f"Cannot undo rename: '{self.new_name}' no longer exists"
-        if os.path.exists(self.old_path):
-            return False, f"Cannot undo rename: '{self.old_name}' already exists"
-        os.rename(self.new_path, self.old_path)
-        return True, f"Undid rename: '{self.new_name}' -> '{self.old_name}'"
+        for old_p, new_p in self.rename_pairs:
+            if old_p != new_p and not os.path.exists(new_p):
+                return False, f"Cannot undo batch rename: '{os.path.basename(new_p)}' no longer exists"
+            if old_p != new_p and os.path.exists(old_p):
+                return False, f"Cannot undo batch rename: target '{os.path.basename(old_p)}' already exists"
+
+        reverted = 0
+        # Revert in reverse order to prevent collision during swap
+        for old_p, new_p in reversed(self.rename_pairs):
+            if old_p != new_p and os.path.exists(new_p):
+                os.rename(new_p, old_p)
+                reverted += 1
+
+        return True, f"Undid batch rename: restored {reverted} file(s)"
 
     def redo(self):
-        if not os.path.exists(self.old_path):
-            return False, f"Cannot redo rename: '{self.old_name}' no longer exists"
-        if os.path.exists(self.new_path):
-            return False, f"Cannot redo rename: '{self.new_name}' already exists"
-        os.rename(self.old_path, self.new_path)
-        return True, f"Redid rename: '{self.old_name}' -> '{self.new_name}'"
+        for old_p, new_p in self.rename_pairs:
+            if old_p != new_p and not os.path.exists(old_p):
+                return False, f"Cannot redo batch rename: '{os.path.basename(old_p)}' no longer exists"
+            if old_p != new_p and os.path.exists(new_p):
+                return False, f"Cannot redo batch rename: target '{os.path.basename(new_p)}' already exists"
+
+        redone = 0
+        for old_p, new_p in self.rename_pairs:
+            if old_p != new_p and os.path.exists(old_p):
+                os.rename(old_p, new_p)
+                redone += 1
+
+        return True, f"Redid batch rename: renamed {redone} file(s)"
 
 class MoveRecord(UndoRecord):
     def __init__(self, src_path, dest_path):
@@ -97,7 +110,6 @@ class TrashRecord(UndoRecord):
         restored = 0
         for orig_path, trash_gfile in self.trashed_items:
             try:
-                # Untrash or copy/move back from trash if possible
                 if trash_gfile and os.path.exists(trash_gfile.get_path()):
                     shutil.move(trash_gfile.get_path(), orig_path)
                     restored += 1
@@ -145,7 +157,6 @@ class UndoManager:
         if ok:
             self.redo_stack.append(record)
         else:
-            # Re-push record if preconditions failed
             self.undo_stack.append(record)
         return ok, msg
 

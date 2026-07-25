@@ -27,7 +27,7 @@ from src.delete_dialog import show_delete_confirmation
 from src.theme import init_theme, set_theme, get_current_theme, get_available_themes
 from src.context_manager import ContextManager
 from src.archive_utils import create_zip_archive, create_tar_archive, extract_archive
-from src.undo_manager import UndoManager, RenameRecord, MoveRecord, CopyRecord, TrashRecord
+from src.undo_manager import UndoManager, BatchRenameRecord, MoveRecord, CopyRecord, TrashRecord
 from src.frecency import FrecencyTracker
 
 class WegWindow(Gtk.ApplicationWindow):
@@ -546,11 +546,12 @@ class WegWindow(Gtk.ApplicationWindow):
             if not targets or not arg:
                 return
 
+            rename_pairs = []
             if len(targets) == 1:
                 old_path = targets[0]
                 new_path = os.path.join(os.path.dirname(old_path), arg)
                 os.rename(old_path, new_path)
-                self.undo_mgr.push(RenameRecord(old_path, new_path))
+                rename_pairs.append((old_path, new_path))
                 self.update_status(f"Renamed to '{arg}' (u to undo)")
             else:
                 for idx, old_path in enumerate(targets, 1):
@@ -561,8 +562,11 @@ class WegWindow(Gtk.ApplicationWindow):
                         new_name = f"{arg}_{idx}{ext}"
                     new_path = os.path.join(os.path.dirname(old_path), new_name)
                     os.rename(old_path, new_path)
-                    self.undo_mgr.push(RenameRecord(old_path, new_path))
+                    rename_pairs.append((old_path, new_path))
                 self.update_status(f"Batch renamed {len(targets)} item(s) (u to undo)")
+
+            if rename_pairs:
+                self.undo_mgr.push(BatchRenameRecord(rename_pairs))
 
         elif verb in ("delete", "rm"):
             self.permanent_delete_selection()
