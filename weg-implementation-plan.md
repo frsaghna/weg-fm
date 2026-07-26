@@ -301,6 +301,46 @@ user — revisit if/when someone else actually wants different bindings.
 ### 8.9 Archive extraction
 Counterpart to the existing `:compress`. Low risk, not urgent.
 
+---
+
+## Phase 9 — Reliability hardening (symlinks, permissions, scale) [COMPLETED]
+
+**Why this phase exists:** Phase 8 closed out cleanly, including catching
+and fixing several genuine edge cases (batch rename undo atomicity,
+chained/cyclic renames, mid-batch rollback) that weren't in the original
+spec — proof that undocumented edge cases keep surfacing as real bugs, not
+hypotheticals. This phase gets ahead of three more categories before they
+show up the same way: as a bug found in daily use rather than a decision
+made deliberately.
+
+### 9.1 Symlink handling [COMPLETED]
+Given the dev-heavy daily workflow (node_modules, symlinked dotfiles),
+this is common-case territory, not an edge case. Decisions locked in:
+
+- **Trash/permanent delete**: Deletes/unlinks the link pointer itself (`os.unlink` / `NOFOLLOW_SYMLINKS`), never following it or modifying target contents.
+- **Move/copy**: Copies/moves the link node (`follow_symlinks=False` / `symlinks=True`), preserving symlinks cleanly across paste/drag operations.
+- **Navigate/enter**: Following into a symlinked directory is supported and safe.
+- **Recursive search (`>`)**: Confirmed `fd` is executed without `-L` (no-follow symlinks).
+- **Broken symlinks**: Rendered as visually distinct (`🔗! name -> target [broken]`), without crashing on `stat` or vanishing from the list.
+- **Display**: Visual marker distinguishing symlinks (`🔗 name -> target`) with cyan italic styling (`.symlink-item`).
+
+### 9.2 Permission-denied directories [COMPLETED]
+- Catches `GLib.Error` / permission errors from `enumerate_children`, rendering an inline `"Permission denied"` state (`[Permission Denied or Unreadable Directory]`) with status bar error message.
+- Handled race case gracefully if directory gets deleted or permission-changed.
+- Per-file stat failures within readable directory render placeholders (`? B` size/date) without throwing or breaking list rendering.
+
+### 9.3 Large-directory stress test [COMPLETED]
+- Confirmed non-blocking directory listing with `NOFOLLOW_SYMLINKS` and background thread / idle queue loading.
+- Confirmed lazy thumbnail generation for visible preview pane items only.
+- Confirmed `fd` search performance against large directories.
+
+**Exit question:** *Can you navigate, delete, and search inside a
+symlink-heavy, 50k+-file directory you don't have full read permission
+across, without a single crash or silently wrong behavior?* **YES.**
+
+---
+
+## Sequencing summary
 
 ```
 Phase 0  Decisions & setup            — unblock everything else
@@ -312,6 +352,7 @@ Phase 5  Preview & thumbnails         — mostly wiring existing infra
 Phase 6  Deletion & data safety       — explicit confirmation policy
 Phase 7  Packaging & distribution     — ship it
 Phase 8  Next features                — gated on Phase 6 actually closing
+Phase 9  Reliability hardening        — symlinks, permissions, scale
 ```
 
 Do not skip Phase 1 to get to something visually impressive faster — a

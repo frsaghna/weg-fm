@@ -1,12 +1,11 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
+  - Robust directory enumeration with NOFOLLOW_SYMLINKS (Phase 9.1)
+  - Explicit inline Permission Denied error states (Phase 9.2)
+  - Symlink & Broken Symlink detection & display (Phase 9.1)
   - Rich Unix file metadata status line (permissions, owner:group, formatted size, mtime)
   - Auto-open single matching folder on filter activation (Enter)
   - Customizable iconsets ('nerdfont', 'minimal', 'unicode')
-  - Minimalist monochrome Nerd Font glyphs (default)
-  - Neovim cursorline highlighting
-  - Half-page jumping (Ctrl+D / Ctrl+U)
-  - Hidden files toggle (.)
 """
 
 import os
@@ -29,6 +28,8 @@ from src.fuzzy import fuzzy_filter_items
 ICON_SETS = {
     "nerdfont": {
         "dir": "󰉋",
+        "symlink": "󰌹",
+        "broken_symlink": "󰌹!",
         "exec": "󰜎",
         "python": "",
         "doc": "󰍔",
@@ -41,6 +42,8 @@ ICON_SETS = {
     },
     "minimal": {
         "dir": "▸",
+        "symlink": "➔",
+        "broken_symlink": "✕",
         "exec": "*",
         "python": "·",
         "doc": "·",
@@ -53,6 +56,8 @@ ICON_SETS = {
     },
     "unicode": {
         "dir": "📁",
+        "symlink": "🔗",
+        "broken_symlink": "⚠️🔗",
         "exec": "⚡",
         "python": "🐍",
         "doc": "📝",
@@ -77,7 +82,7 @@ def format_size(size_bytes):
 
 def get_file_details(path, is_dir):
     try:
-        st = os.stat(path)
+        st = os.stat(path, follow_symlinks=False)
         mode_str = stat.filemode(st.st_mode)
         try:
             owner = pwd.getpwuid(st.st_uid).pw_name
@@ -90,20 +95,27 @@ def get_file_details(path, is_dir):
         mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime))
         return f"{mode_str}  │  {owner_str}  │  {size_str}  │  {mtime_str}"
     except Exception:
-        return "DIR" if is_dir else f"{os.path.getsize(path)} B"
+        return "DIR" if is_dir else "? B"
 
 class FileItem:
-    def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False, iconset="nerdfont"):
+    def __init__(self, name, path, is_dir, size=0, display_path=None, is_exec=False, is_symlink=False, symlink_target=None, is_broken_symlink=False, iconset="nerdfont"):
         self.name = name
         self.path = path
         self.is_dir = is_dir
         self.size = size
         self.display_path = display_path or name
         self.is_exec = is_exec
+        self.is_symlink = is_symlink
+        self.symlink_target = symlink_target
+        self.is_broken_symlink = is_broken_symlink
         self.icon = self._resolve_icon(iconset)
 
     def _resolve_icon(self, iconset_name):
         palette = ICON_SETS.get(iconset_name, ICON_SETS["nerdfont"])
+        if self.is_broken_symlink:
+            return palette["broken_symlink"]
+        if self.is_symlink:
+            return palette["symlink"]
         if self.is_dir:
             return palette["dir"]
 
@@ -150,7 +162,6 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.list_box.connect("row-selected", self._on_row_selected)
         self.set_child(self.list_box)
 
-        # Setup Gtk.DropTarget
         drop_target = Gtk.DropTarget.new(
             type=Gdk.FileList,
             actions=Gdk.DragAction.COPY | Gdk.DragAction.MOVE
@@ -190,7 +201,7 @@ class FileListWidget(Gtk.ScrolledWindow):
             return False
 
         for src_path in dropped_files:
-            if not os.path.exists(src_path):
+            if not os.path.exists(src_path) and not os.path.islink(src_path):
                 continue
             dest_name = os.path.basename(src_path)
             dest_path = os.path.join(self.current_dir, dest_name)
@@ -198,12 +209,17 @@ class FileListWidget(Gtk.ScrolledWindow):
                 continue
             
             try:
-                if os.path.isdir(src_path):
+                if os.path.islink(src_path):
+                    target = os.readlink(src_path)
+                    if os.path.exists(dest_path):
+                        os.unlink(dest_path)
+                    os.symlink(target, dest_path)
+                elif os.path.isdir(src_path):
                     if os.path.exists(dest_path):
                         shutil.rmtree(dest_path, ignore_errors=True)
-                    shutil.copytree(src_path, dest_path)
+                    shutil.copytree(src_path, dest_path, symlinks=True)
                 else:
-                    shutil.copy2(src_path, dest_path)
+                    shutil.copy2(src_path, dest_path, follow_symlinks=False)
             except Exception as e:
                 print(f"[FileList] Drop copy error for {src_path}: {e}")
 
@@ -212,6 +228,11 @@ class FileListWidget(Gtk.ScrolledWindow):
 
     def load_directory(self, path):
         path = os.path.abspath(path)
+        if not os.path.exists(path):
+            if self.on_status_change:
+                self.on_status_change(f"Directory not found: '{path}'")
+            return False
+
         if not os.path.isdir(path):
             return False
 
@@ -222,32 +243,58 @@ class FileListWidget(Gtk.ScrolledWindow):
 
         try:
             enumerator = gfile.enumerate_children(
-                "standard::name,standard::type,standard::size,access::can-execute",
-                Gio.FileQueryInfoFlags.NONE,
+                "standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target,access::can-execute",
+                Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
                 None
             )
-        except Exception as e:
-            print(f"[FileList] Error opening directory {path}: {e}")
-            return False
-
-        new_items = []
-        info = enumerator.next_file(None)
-        while info:
-            name = info.get_name()
-            ftype = info.get_file_type()
-            is_dir = (ftype == Gio.FileType.DIRECTORY)
-            is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
-            size = info.get_size()
-            item_path = os.path.join(path, name)
-            new_items.append(FileItem(name, item_path, is_dir, size, is_exec=is_exec, iconset=self.iconset))
+            new_items = []
             info = enumerator.next_file(None)
+            while info:
+                name = info.get_name()
+                ftype = info.get_file_type()
+                is_dir = (ftype == Gio.FileType.DIRECTORY)
+                is_symlink = info.get_attribute_boolean("standard::is-symlink")
+                symlink_target = info.get_symlink_target() if is_symlink else None
+                item_path = os.path.join(path, name)
 
-        enumerator.close(None)
-        new_items.sort(key=lambda item: (not item.is_dir, item.name.lower()))
-        
-        self.all_items = new_items
-        self._apply_current_filter()
-        return True
+                is_broken = False
+                if is_symlink:
+                    is_broken = not os.path.exists(item_path)
+
+                is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
+                size = info.get_size()
+
+                new_items.append(FileItem(
+                    name=name,
+                    path=item_path,
+                    is_dir=is_dir,
+                    size=size,
+                    is_exec=is_exec,
+                    is_symlink=is_symlink,
+                    symlink_target=symlink_target,
+                    is_broken_symlink=is_broken,
+                    iconset=self.iconset
+                ))
+                info = enumerator.next_file(None)
+
+            enumerator.close(None)
+            new_items.sort(key=lambda item: (not item.is_dir, item.name.lower()))
+            self.all_items = new_items
+            self._apply_current_filter()
+            return True
+
+        except Exception as e:
+            err_msg = f"Permission denied: '{path}'"
+            self.all_items = []
+            self._populate_list([FileItem(
+                name="[Permission Denied or Unreadable Directory]",
+                path=path,
+                is_dir=False,
+                iconset=self.iconset
+            )])
+            if self.on_status_change:
+                self.on_status_change(err_msg)
+            return False
 
     def _apply_current_filter(self):
         filtered = self.all_items
@@ -264,12 +311,10 @@ class FileListWidget(Gtk.ScrolledWindow):
         if not self.show_hidden:
             filtered = [item for item in filtered if not item.name.startswith('.')]
         
-        # Fuzzy subsequence matching & ranking
         fuzzy_matched = fuzzy_filter_items(filtered, query, key_fn=lambda item: item.name)
         self._populate_list(fuzzy_matched)
 
     def try_auto_open_single_folder(self):
-        """Called on filter activation (Enter). Enters directory if exactly ONE folder matches."""
         if len(self.displayed_items) == 1:
             single_item = self.displayed_items[0]
             if single_item.is_dir and self.on_open_directory:
@@ -296,8 +341,12 @@ class FileListWidget(Gtk.ScrolledWindow):
         for p in lines[:200]:
             rel_path = os.path.relpath(p, self.current_dir)
             is_dir = os.path.isdir(p)
+            is_symlink = os.path.islink(p)
+            is_broken = is_symlink and not os.path.exists(p)
+            sym_target = os.readlink(p) if is_symlink else None
             is_exec = os.access(p, os.X_OK) if not is_dir and os.path.exists(p) else False
             size = os.path.getsize(p) if not is_dir and os.path.exists(p) else 0
+
             search_items.append(FileItem(
                 name=os.path.basename(p),
                 path=p,
@@ -305,10 +354,12 @@ class FileListWidget(Gtk.ScrolledWindow):
                 size=size,
                 display_path=rel_path,
                 is_exec=is_exec,
+                is_symlink=is_symlink,
+                symlink_target=sym_target,
+                is_broken_symlink=is_broken,
                 iconset=self.iconset
             ))
 
-        # Fuzzy subsequence matching & ranking for recursive search results
         fuzzy_search_items = fuzzy_filter_items(search_items, query, key_fn=lambda item: item.display_path)
         self._populate_list(fuzzy_search_items)
 
@@ -336,11 +387,21 @@ class FileListWidget(Gtk.ScrolledWindow):
             row_box.append(sel_label)
 
             disp = item.display_path if hasattr(item, 'display_path') else item.name
-            label_text = f"{item.icon}  {disp}{'/' if item.is_dir else ''}"
+            if item.is_broken_symlink:
+                label_text = f"{item.icon}  {disp} -> {item.symlink_target or '?'} [broken]"
+            elif item.is_symlink:
+                label_text = f"{item.icon}  {disp} -> {item.symlink_target}"
+            else:
+                label_text = f"{item.icon}  {disp}{'/' if item.is_dir else ''}"
 
             lbl = Gtk.Label(label=label_text, xalign=0.0)
             lbl.set_use_underline(False)
-            if item.name.startswith('.'):
+
+            if item.is_broken_symlink:
+                lbl.add_css_class("broken-symlink-item")
+            elif item.is_symlink:
+                lbl.add_css_class("symlink-item")
+            elif item.name.startswith('.'):
                 lbl.add_css_class("hidden-item")
             elif item.is_dir:
                 lbl.add_css_class("dir-item")
@@ -372,7 +433,6 @@ class FileListWidget(Gtk.ScrolledWindow):
             if target_row:
                 self.list_box.select_row(target_row)
                 if is_entry_focused:
-                    # Focus is ALREADY inside entry. Do not call grab_focus() to avoid selecting text
                     pass
                 elif root and hasattr(root, 'command_bar') and root.command_bar.mode:
                     root.command_bar.entry.grab_focus()

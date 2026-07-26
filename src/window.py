@@ -254,7 +254,9 @@ class WegWindow(Gtk.ApplicationWindow):
         deleted_count = 0
         for t in targets:
             try:
-                if os.path.isdir(t):
+                if os.path.islink(t):
+                    os.unlink(t)
+                elif os.path.isdir(t):
                     shutil.rmtree(t, ignore_errors=True)
                 elif os.path.exists(t):
                     os.remove(t)
@@ -322,10 +324,15 @@ class WegWindow(Gtk.ApplicationWindow):
                         if action == "cut":
                             shutil.move(src_path, dest_path)
                         else:
-                            if os.path.isdir(src_path):
-                                shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+                            if os.path.islink(src_path):
+                                target = os.readlink(src_path)
+                                if os.path.exists(dest_path) or os.path.islink(dest_path):
+                                    os.unlink(dest_path)
+                                os.symlink(target, dest_path)
+                            elif os.path.isdir(src_path):
+                                shutil.copytree(src_path, dest_path, dirs_exist_ok=True, symlinks=True)
                             else:
-                                shutil.copy2(src_path, dest_path)
+                                shutil.copy2(src_path, dest_path, follow_symlinks=False)
                         src_paths.append(src_path)
                         dest_paths.append(dest_path)
 
@@ -349,15 +356,20 @@ class WegWindow(Gtk.ApplicationWindow):
                 dest_paths = []
                 for f in val.get_files():
                     src_path = f.get_path()
-                    if src_path and os.path.exists(src_path):
+                    if src_path and (os.path.exists(src_path) or os.path.islink(src_path)):
                         dest_name = os.path.basename(src_path)
                         dest_path = os.path.join(self.current_dir, dest_name)
                         if src_path == dest_path:
                             continue
-                        if os.path.isdir(src_path):
-                            shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+                        if os.path.islink(src_path):
+                            target = os.readlink(src_path)
+                            if os.path.exists(dest_path) or os.path.islink(dest_path):
+                                os.unlink(dest_path)
+                            os.symlink(target, dest_path)
+                        elif os.path.isdir(src_path):
+                            shutil.copytree(src_path, dest_path, dirs_exist_ok=True, symlinks=True)
                         else:
-                            shutil.copy2(src_path, dest_path)
+                            shutil.copy2(src_path, dest_path, follow_symlinks=False)
                         src_paths.append(src_path)
                         dest_paths.append(dest_path)
 

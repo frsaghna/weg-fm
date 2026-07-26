@@ -391,6 +391,17 @@ row:selected .key-cap {{
     color: {palette['file_color']};
 }}
 
+.symlink-item {{
+    color: {palette['selection_accent']};
+    font-style: italic;
+}}
+
+.broken-symlink-item {{
+    color: {palette['badge_cmd']};
+    font-style: italic;
+    font-weight: bold;
+}}
+
 .hidden-item {{
     color: #565f89;
 }}

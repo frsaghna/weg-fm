@@ -1,0 +1,84 @@
+Metadata-Version: 2.4
+Name: weg-fm
+Version: 0.1.0
+Summary: A minimal, keyboard-first GTK4/GIO file explorer for Linux
+Author: weg contributors
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: PyGObject>=3.42.0
+
+# weg (`weg-fm`)
+
+*Minimal, keyboard-first GTK4 file explorer for Linux with native desktop interop.*
+
+---
+
+## 🌟 Key Features
+
+- **Keyboard-First Navigation**: Move through directories instantly using `j`/`k` or `↑`/`↓`, open files with `Enter`, parent dir with `Backspace`, and direct path editing via `Ctrl+L`.
+- **Command-Line Grammar**:
+  - `/query` — Instant local current-directory live filter.
+  - `>query` — Instant recursive search powered by `fd` (tiered search <15ms response).
+  - `:command` — Integrated command mode (`:new folder`, `:new file`, `:rename`, `:delete`).
+- **Native Clipboard Interop**: Real file objects on GTK/Wayland clipboard (`x-special/gnome-copied-files` and `Gdk.FileList`). Cut (`Ctrl+X`), Copy (`Ctrl+C`), and Paste (`Ctrl+V`) directly to and from Nautilus, Dolphin, or other GTK/Qt applications.
+- **Native Drag and Drop**: Drag files out from `weg` into Nautilus or drag files in from Nautilus (`GtkDragSource` & `GtkDropTarget` supporting `COPY | MOVE` negotiation).
+- **Live Directory Updates**: Powered by GIO `GFileMonitor` (inotify-backed) — directory listings update automatically when files change externally.
+- **Inline Preview Pane**: Press `Tab` to toggle live side-by-side preview of text files or image/media thumbnails (Freedesktop Thumbnailer spec & GdkPixbuf).
+- **Data Safety Policies**: `x` moves items safely to Trash (XDG Trash spec via GIO). `Shift+X` triggers permanent delete with confirmation dialog.
+
+---
+
+## ⌨️ Keybindings
+
+| Key | Action |
+|---|---|
+| `↑` / `k` | Move selection up |
+| `↓` / `j` | Move selection down |
+| `Enter` | Open file or directory |
+| `Backspace` | Navigate to parent directory |
+| `Space` | Toggle multi-selection on focused item |
+| `Ctrl+L` | Focus path bar for direct path editing |
+| `/` | Instant current-directory filter mode |
+| `>` | Recursive search mode via `fd` |
+| `:` | Command mode (`:new folder`, `:new file`, `:rename`, `:delete`) |
+| `r` | Quick inline rename mode |
+| `Ctrl+C` | Copy selected file(s) to clipboard |
+| `Ctrl+X` | Cut selected file(s) to clipboard |
+| `Ctrl+V` | Paste file(s) from clipboard |
+| `Tab` | Toggle side-by-side file preview pane |
+| `x` | Move selected file(s) to Trash (GIO Trash API) |
+| `Shift+X` | Permanently delete selected file(s) (with safety confirmation) |
+| `Esc` | Cancel filter/search/command mode or path editing |
+
+---
+
+## 🚀 Installation & Usage
+
+### Dependencies
+Ensure the system GTK4 and PyGObject packages are installed:
+- Arch Linux: `pacman -S gtk4 python-gobject fd ffmpegthumbnailer evince`
+
+### Launch Locally
+```bash
+./weg [directory_path]
+```
+
+### Install Package
+```bash
+pip install .
+```
+
+---
+
+## 🧪 Testing
+
+Run the full automated test suite:
+```bash
+python3 -m unittest discover tests
+```
+
+---
+
+## 📜 License
+MIT License
