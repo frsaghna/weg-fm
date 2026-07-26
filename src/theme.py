@@ -166,25 +166,27 @@ def load_omarchy_palette():
         with open(OMARCHY_COLORS_PATH, "rb") as f:
             data = tomllib.load(f)
 
-        bg = data.get("background", "#000000")
-        fg = data.get("foreground", "#e7e9ea")
-        accent = data.get("accent", "#ff8852")
-        sel_bg = data.get("selection_background", "#e7e9ea")
-        sel_fg = data.get("selection_foreground", "#000000")
+        bg = data.get("background", "#1a1b26")
+        fg = data.get("foreground", "#c0caf5")
+        accent = data.get("accent", "#7aa2f7")
+        sel_bg = data.get("selection_background", "#283457")
+        sel_fg = data.get("selection_foreground", "#ffffff")
 
-        c0 = data.get("color0", "#121212")
-        c1 = data.get("color1", "#8a8a8a")
-        c2 = data.get("color2", "#e7e9ea")
-        c3 = data.get("color3", "#9e9e9e")
-        c4 = data.get("color4", "#626262")
-        c8 = data.get("color8", "#626262")
+        c0 = data.get("color0", "#16161e")
+        c1 = data.get("color1", "#f7768e")
+        c2 = data.get("color2", "#9ece6a")
+        c3 = data.get("color3", "#e0af68")
+        c4 = data.get("color4", "#7aa2f7")
+        c8 = data.get("color8", "#292e42")
+
+        dir_col = c4 if (c4 and c4 not in (bg, "#626262")) else accent
 
         return {
             "name": "Omarchy Global System",
             "bg": bg,
             "fg": fg,
             "header_bg": c0,
-            "dir_color": c4 if c4 != bg else accent,
+            "dir_color": dir_col,
             "file_color": fg,
             "exec_color": c2,
             "selection_bg": sel_bg,
@@ -590,5 +592,5 @@ def save_config(config_data):
 
 def init_theme():
     config = load_config()
-    saved_theme = config.get("theme", "omarchy" if os.path.exists(OMARCHY_COLORS_PATH) else "tokyonight")
+    saved_theme = config.get("theme", "tokyonight")
     set_theme(saved_theme)
