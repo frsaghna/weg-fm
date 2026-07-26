@@ -1,20 +1,19 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="weg-fm",
-    version="1.0.0",
+    version="1.0.2",
     description="Keyboard-first GTK4 file manager for Linux",
     author="weg-fm contributors",
     license="GPL-3.0-or-later",
-    package_dir={"": "."},
-    packages=["weg_fm"],
+    packages=["src"],
     data_files=[
         ("share/applications", ["fm.weg.WegFM.desktop"]),
         ("share/licenses/weg-fm", ["LICENSE"]),
     ],
     entry_points={
         "console_scripts": [
-            "weg=weg_fm.main:main",
+            "weg=src.main:main",
         ],
     },
 )
