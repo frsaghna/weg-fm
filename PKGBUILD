@@ -13,7 +13,7 @@ optdepends=(
 )
 makedepends=('python-setuptools')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('110c837bf19362a03715c1d81e0a30d9852b1971602907f72e447a1b734f0ae8')
 
 prepare() {
     rm -rf "$pkgname-$pkgver"
