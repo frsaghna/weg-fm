@@ -1,8 +1,14 @@
 from setuptools import setup
+import os
+import shutil
+
+# Ensure build cache is purged on every setup invocation
+if os.path.exists("build"):
+    shutil.rmtree("build", ignore_errors=True)
 
 setup(
     name="weg-fm",
-    version="1.0.4",
+    version="1.0.5",
     description="Keyboard-first GTK4 file manager for Linux",
     author="weg-fm contributors",
     license="GPL-3.0-or-later",
