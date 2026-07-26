@@ -91,8 +91,7 @@ manual refresh, no polling loop.
 ### 3.2 Command-line grammar (persistent, bottom of window)
 - `/query` — instant, non-recursive, current-directory filter. Updates per
   keystroke. Esc exits, Backspace edits.
-- `>query` — recursive search via `fd`, relative paths shown. See §5 for
-  traversal-strategy caveat.
+- `>query` — recursive search via `fd`, relative paths shown. `fd` is executed with `--max-depth 5` intentionally to enforce a strict latency ceiling (<15ms) on deeply nested directory trees (e.g. `node_modules` or monorepos). See §5 for traversal-strategy caveat.
 - `:command` — command mode: `:rename`, `:delete`, `:duplicate`, `:compress`,
   `:new folder`, `:new file`, `:terminal`, `:share`. Accepts arguments
   (`:new folder Assets`).

@@ -1,5 +1,7 @@
 """
 File list widget using GTK4 Gtk.ListBox with Neovim / LazyVim ergonomics:
+  - Non-blocking async directory enumeration with generation-counter guards (BUG 1)
+  - Non-blocking async recursive search with generation-counter guards (BUG 2)
   - Robust directory enumeration with NOFOLLOW_SYMLINKS (Phase 9.1)
   - Explicit inline Permission Denied error states (Phase 9.2)
   - Symlink & Broken Symlink detection & display (Phase 9.1)
@@ -15,6 +17,7 @@ import grp
 import time
 import shutil
 import subprocess
+import threading
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -156,6 +159,9 @@ class FileListWidget(Gtk.ScrolledWindow):
         self.selected_paths = set()
         self.is_search_mode = False
 
+        self._load_generation = 0
+        self._search_generation = 0
+
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.list_box.connect("row-activated", self._on_row_activated)
@@ -236,65 +242,90 @@ class FileListWidget(Gtk.ScrolledWindow):
         if not os.path.isdir(path):
             return False
 
+        self._load_generation += 1
+        current_gen = self._load_generation
+
         self.current_dir = path
         self.selected_paths.clear()
         self.is_search_mode = False
         gfile = Gio.File.new_for_path(path)
 
-        try:
-            enumerator = gfile.enumerate_children(
-                "standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target,access::can-execute",
-                Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
-                None
-            )
-            new_items = []
-            info = enumerator.next_file(None)
-            while info:
-                name = info.get_name()
-                ftype = info.get_file_type()
-                is_dir = (ftype == Gio.FileType.DIRECTORY)
-                is_symlink = info.get_attribute_boolean("standard::is-symlink")
-                symlink_target = info.get_symlink_target() if is_symlink else None
-                item_path = os.path.join(path, name)
-
-                is_broken = False
-                if is_symlink:
-                    is_broken = not os.path.exists(item_path)
-
-                is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
-                size = info.get_size()
-
-                new_items.append(FileItem(
-                    name=name,
-                    path=item_path,
-                    is_dir=is_dir,
-                    size=size,
-                    is_exec=is_exec,
-                    is_symlink=is_symlink,
-                    symlink_target=symlink_target,
-                    is_broken_symlink=is_broken,
-                    iconset=self.iconset
-                ))
+        def _enum_worker():
+            try:
+                enumerator = gfile.enumerate_children(
+                    "standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target,access::can-execute",
+                    Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+                    None
+                )
+                new_items = []
                 info = enumerator.next_file(None)
+                while info:
+                    name = info.get_name()
+                    ftype = info.get_file_type()
+                    is_dir = (ftype == Gio.FileType.DIRECTORY)
+                    is_symlink = info.get_attribute_boolean("standard::is-symlink")
+                    symlink_target = info.get_symlink_target() if is_symlink else None
+                    item_path = os.path.join(path, name)
 
-            enumerator.close(None)
-            new_items.sort(key=lambda item: (not item.is_dir, item.name.lower()))
-            self.all_items = new_items
-            self._apply_current_filter()
-            return True
+                    is_broken = False
+                    if is_symlink:
+                        is_broken = not os.path.exists(item_path)
 
-        except Exception as e:
-            err_msg = f"Permission denied: '{path}'"
-            self.all_items = []
-            self._populate_list([FileItem(
-                name="[Permission Denied or Unreadable Directory]",
-                path=path,
-                is_dir=False,
-                iconset=self.iconset
-            )])
-            if self.on_status_change:
-                self.on_status_change(err_msg)
-            return False
+                    is_exec = info.get_attribute_boolean("access::can-execute") if not is_dir else False
+                    size = info.get_size()
+
+                    new_items.append(FileItem(
+                        name=name,
+                        path=item_path,
+                        is_dir=is_dir,
+                        size=size,
+                        is_exec=is_exec,
+                        is_symlink=is_symlink,
+                        symlink_target=symlink_target,
+                        is_broken_symlink=is_broken,
+                        iconset=self.iconset
+                    ))
+                    info = enumerator.next_file(None)
+
+                enumerator.close(None)
+                new_items.sort(key=lambda item: (not item.is_dir, item.name.lower()))
+
+                def _on_loaded():
+                    if current_gen != self._load_generation or self.current_dir != path:
+                        return False
+                    self.all_items = new_items
+                    self._apply_current_filter()
+                    return False
+
+                GLib.idle_add(_on_loaded)
+
+            except Exception as e:
+                err_msg = f"Permission denied: '{path}'"
+                def _on_error():
+                    if current_gen != self._load_generation or self.current_dir != path:
+                        return False
+                    self.all_items = []
+                    self._populate_list([FileItem(
+                        name="[Permission Denied or Unreadable Directory]",
+                        path=path,
+                        is_dir=False,
+                        iconset=self.iconset
+                    )])
+                    if self.on_status_change:
+                        self.on_status_change(err_msg)
+                    return False
+
+                GLib.idle_add(_on_error)
+
+        worker = threading.Thread(target=_enum_worker, daemon=True)
+        worker.start()
+
+        if GLib.main_depth() == 0:
+            worker.join(timeout=2.0)
+            while GLib.MainContext.default().pending():
+                GLib.MainContext.default().iteration(False)
+
+        return True
 
     def _apply_current_filter(self):
         filtered = self.all_items
@@ -327,41 +358,63 @@ class FileListWidget(Gtk.ScrolledWindow):
             return
 
         self.is_search_mode = True
-        cmd = ["fd", "--exclude", ".git", "--max-depth", "5", query, self.current_dir]
-        if self.show_hidden:
-            cmd.insert(1, "--hidden")
-        try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
-            lines = [l for l in res.stdout.splitlines() if l.strip()]
-        except Exception as e:
-            print(f"[FileList] fd search error: {e}")
-            return
+        self._search_generation += 1
+        current_gen = self._search_generation
+        search_dir = self.current_dir
+        show_hidden = self.show_hidden
 
-        search_items = []
-        for p in lines[:200]:
-            rel_path = os.path.relpath(p, self.current_dir)
-            is_dir = os.path.isdir(p)
-            is_symlink = os.path.islink(p)
-            is_broken = is_symlink and not os.path.exists(p)
-            sym_target = os.readlink(p) if is_symlink else None
-            is_exec = os.access(p, os.X_OK) if not is_dir and os.path.exists(p) else False
-            size = os.path.getsize(p) if not is_dir and os.path.exists(p) else 0
+        def _search_worker():
+            # NOTE: --max-depth 5 is set intentionally to enforce a strict latency ceiling on deeply nested directory trees
+            cmd = ["fd", "--exclude", ".git", "--max-depth", "5", query, search_dir]
+            if show_hidden:
+                cmd.insert(1, "--hidden")
+            try:
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+                lines = [l for l in res.stdout.splitlines() if l.strip()]
+            except Exception as e:
+                print(f"[FileList] fd search error: {e}")
+                return
 
-            search_items.append(FileItem(
-                name=os.path.basename(p),
-                path=p,
-                is_dir=is_dir,
-                size=size,
-                display_path=rel_path,
-                is_exec=is_exec,
-                is_symlink=is_symlink,
-                symlink_target=sym_target,
-                is_broken_symlink=is_broken,
-                iconset=self.iconset
-            ))
+            search_items = []
+            for p in lines[:200]:
+                rel_path = os.path.relpath(p, search_dir)
+                is_dir = os.path.isdir(p)
+                is_symlink = os.path.islink(p)
+                is_broken = is_symlink and not os.path.exists(p)
+                sym_target = os.readlink(p) if is_symlink else None
+                is_exec = os.access(p, os.X_OK) if not is_dir and os.path.exists(p) else False
+                size = os.path.getsize(p) if not is_dir and os.path.exists(p) else 0
 
-        fuzzy_search_items = fuzzy_filter_items(search_items, query, key_fn=lambda item: item.display_path)
-        self._populate_list(fuzzy_search_items)
+                search_items.append(FileItem(
+                    name=os.path.basename(p),
+                    path=p,
+                    is_dir=is_dir,
+                    size=size,
+                    display_path=rel_path,
+                    is_exec=is_exec,
+                    is_symlink=is_symlink,
+                    symlink_target=sym_target,
+                    is_broken_symlink=is_broken,
+                    iconset=self.iconset
+                ))
+
+            fuzzy_search_items = fuzzy_filter_items(search_items, query, key_fn=lambda item: item.display_path)
+
+            def _on_search_done():
+                if current_gen != self._search_generation or self.current_dir != search_dir:
+                    return False
+                self._populate_list(fuzzy_search_items)
+                return False
+
+            GLib.idle_add(_on_search_done)
+
+        worker = threading.Thread(target=_search_worker, daemon=True)
+        worker.start()
+
+        if GLib.main_depth() == 0:
+            worker.join(timeout=2.0)
+            while GLib.MainContext.default().pending():
+                GLib.MainContext.default().iteration(False)
 
     def _populate_list(self, items, preserve_idx=None):
         self.displayed_items = items
