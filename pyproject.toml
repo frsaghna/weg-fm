@@ -4,18 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "weg-fm"
-version = "0.1.0"
-description = "A minimal, keyboard-first GTK4/GIO file explorer for Linux"
+version = "1.0.0"
+description = "Keyboard-first GTK4 file manager for Linux featuring desktop interop and multi-level undo"
 readme = "README.md"
-authors = [{ name = "weg contributors" }]
-license = "MIT"
+authors = [{ name = "weg-fm contributors" }]
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.10"
 dependencies = [
     "PyGObject>=3.42.0"
 ]
 
 [project.scripts]
-weg = "src.main:main"
+weg = "weg_fm.main:main"
+
+[tool.setuptools.package-dir]
+"weg_fm" = "src"
 
 [tool.setuptools.packages.find]
 where = ["."]

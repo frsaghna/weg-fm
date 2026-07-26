@@ -6,15 +6,15 @@ setup(
     description="Keyboard-first GTK4 file manager for Linux",
     author="weg-fm contributors",
     license="GPL-3.0-or-later",
-    packages=find_packages(),
-    py_modules=["weg"],
+    package_dir={"": "."},
+    packages=["weg_fm"],
     data_files=[
         ("share/applications", ["fm.weg.WegFM.desktop"]),
         ("share/licenses/weg-fm", ["LICENSE"]),
     ],
     entry_points={
         "console_scripts": [
-            "weg=src.main:main",
+            "weg=weg_fm.main:main",
         ],
     },
 )
